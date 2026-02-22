@@ -7,7 +7,7 @@ adventure and RPG games (King's Quest / Leisure Suit Larry / D&D-lite). Go
 engine, Lua content, JSON saves. This is a real project, not a toy — treat it
 as production-quality software engineering.
 
-Read `DESIGN.md` before making any architectural decisions. It is the source of
+Read `docs/DESIGN.md` before making any architectural decisions. It is the source of
 truth for architecture, data model, rules engine, Lua API, module structure, and
 scope. If something contradicts the design doc, stop and ask before proceeding.
 
@@ -66,7 +66,7 @@ These are non-negotiable. If a change would break one of these, it's wrong.
 - Use `New` prefix for constructors: `state.NewState()`, `rules.NewEngine()`.
 
 ### Structure
-- Follow the module structure in `DESIGN.md` section 14. Packages under
+- Follow the module structure in `docs/DESIGN.md` section 14. Packages under
   `engine/` are sub-packages with clear, single responsibilities.
 - `types/` holds shared data types with no logic. No business logic in types.
 - `loader/` handles all Lua interaction. No Lua imports anywhere else.
@@ -189,7 +189,7 @@ testable before moving on:
 
 ## What Not to Build
 
-Respect the MVP scope in `DESIGN.md` section 15. These do not exist yet:
+Respect the MVP scope in `docs/DESIGN.md` section 15. These do not exist yet:
 
 - Combat system
 - Scripting escape hatch (`function(ctx)`)
@@ -205,6 +205,6 @@ before implementing.
 
 | File | Purpose |
 |------|---------|
-| `DESIGN.md` | Architecture and technical design (source of truth) |
-| `questcore.md` | Original PRD (product context and vision) |
+| `docs/DESIGN.md` | Architecture and technical design (source of truth) |
+| `docs/questcore.md` | Original PRD (product context and vision) |
 | `CLAUDE.md` | This file (engineering guide and conventions) |
