@@ -1,0 +1,22 @@
+# Compiled binaries
+questcore
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Saves
+*.json.bak

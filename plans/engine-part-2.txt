@@ -1,0 +1,249 @@
+│ Plan: QuestCore Layers 7, 9-11 (Events, Dialogue, Save, Step)                                                                                                                       │
+│                                                                                                                                                                                     │
+│ Context                                                                                                                                                                             │
+│                                                                                                                                                                                     │
+│ Layers 1-6 are complete (133 tests passing): types, state, parser, resolve, rules,                                                                                                  │
+│ effects. This session completes all pure-Go engine internals by adding event                                                                                                        │
+│ dispatch, dialogue, save/load, and the Step() orchestrator that wires everything                                                                                                    │
+│ together.                                                                                                                                                                           │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ Pre-requisites: Type additions                                                                                                                                                      │
+│                                                                                                                                                                                     │
+│ Add TopicDef to types/types.go                                                                                                                                                      │
+│                                                                                                                                                                                     │
+│ type TopicDef struct {                                                                                                                                                              │
+│     Text     string                                                                                                                                                                 │
+│     Requires []Condition                                                                                                                                                            │
+│     Effects  []Effect                                                                                                                                                               │
+│ }                                                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ Add Topics field to EntityDef                                                                                                                                                       │
+│                                                                                                                                                                                     │
+│ type EntityDef struct {                                                                                                                                                             │
+│     ID     string                                                                                                                                                                   │
+│     Kind   string                                                                                                                                                                   │
+│     Props  map[string]any                                                                                                                                                           │
+│     Rules  []RuleDef                                                                                                                                                                │
+│     Topics map[string]TopicDef // NPC topics (nil for non-NPCs)                                                                                                                     │
+│ }                                                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ This is cleaner than stuffing topics into Props and casting.                                                                                                                        │
+│                                                                                                                                                                                     │
+│ Modify rules.Evaluate to return match status                                                                                                                                        │
+│                                                                                                                                                                                     │
+│ Change signature to ([]types.Effect, bool) — the bool indicates whether a                                                                                                           │
+│ rule actually matched (true) vs. fallback was used (false). Step() needs this                                                                                                       │
+│ to know when to apply built-in behavior (e.g., movement via exits).                                                                                                                 │
+│                                                                                                                                                                                     │
+│ Files: types/types.go, engine/rules/rules.go, engine/rules/rules_test.go                                                                                                            │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ Layer 7: engine/events/events.go                                                                                                                                                    │
+│                                                                                                                                                                                     │
+│ Single-pass event handler dispatch (DESIGN.md §7).                                                                                                                                  │
+│                                                                                                                                                                                     │
+│ API                                                                                                                                                                                 │
+│                                                                                                                                                                                     │
+│ // Dispatch runs event handlers against the emitted events. Single pass — no recursion.                                                                                             │
+│ // Returns additional effects produced by matching handlers.                                                                                                                        │
+│ func Dispatch(events []types.Event, s *types.State, defs *state.Defs) []types.Effect                                                                                                │
+│                                                                                                                                                                                     │
+│ Logic                                                                                                                                                                               │
+│                                                                                                                                                                                     │
+│ For each event:                                                                                                                                                                     │
+│ 1. Check each handler in defs.Handlers                                                                                                                                              │
+│ 2. If handler's EventType matches event.Type AND all conditions pass → collect its effects                                                                                          │
+│ 3. Return all collected effects (applied by Step(), not here)                                                                                                                       │
+│                                                                                                                                                                                     │
+│ No recursion. Effects from handlers may emit events, but those events are NOT                                                                                                       │
+│ dispatched further. Single depth.                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ Tests (engine/events/events_test.go)                                                                                                                                                │
+│                                                                                                                                                                                     │
+│ - Handler matches event type + conditions → returns effects                                                                                                                         │
+│ - Handler doesn't match event type → skipped                                                                                                                                        │
+│ - Handler conditions fail → skipped                                                                                                                                                 │
+│ - Multiple handlers match → effects concatenated                                                                                                                                    │
+│ - No handlers → empty effects                                                                                                                                                       │
+│ - Multiple events dispatched in one pass                                                                                                                                            │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ Layer 9: engine/dialogue/dialogue.go                                                                                                                                                │
+│                                                                                                                                                                                     │
+│ NPC topic system (DESIGN.md §8).                                                                                                                                                    │
+│                                                                                                                                                                                     │
+│ API                                                                                                                                                                                 │
+│                                                                                                                                                                                     │
+│ // AvailableTopics returns topic keys whose conditions are met.                                                                                                                     │
+│ func AvailableTopics(npcID string, s *types.State, defs *state.Defs) []string                                                                                                       │
+│                                                                                                                                                                                     │
+│ // SelectTopic returns the text and effects for a chosen topic.                                                                                                                     │
+│ // Returns empty text and nil effects if topic doesn't exist or conditions not met.                                                                                                 │
+│ func SelectTopic(npcID, topicKey string, s *types.State, defs *state.Defs) (string, []types.Effect)                                                                                 │
+│                                                                                                                                                                                     │
+│ Logic                                                                                                                                                                               │
+│                                                                                                                                                                                     │
+│ - AvailableTopics: Look up defs.Entities[npcID].Topics, filter by Requires conditions.                                                                                              │
+│ - SelectTopic: Validate topic exists and conditions pass, return text + effects.                                                                                                    │
+│                                                                                                                                                                                     │
+│ Tests (engine/dialogue/dialogue_test.go)                                                                                                                                            │
+│                                                                                                                                                                                     │
+│ - NPC with topics, all available                                                                                                                                                    │
+│ - Topic gated by condition — hidden when condition fails                                                                                                                            │
+│ - Topic gated by condition — visible when condition passes                                                                                                                          │
+│ - Select valid topic → returns text + effects                                                                                                                                       │
+│ - Select topic with failed condition → empty                                                                                                                                        │
+│ - Select nonexistent topic → empty                                                                                                                                                  │
+│ - NPC with no topics → empty list                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ Layer 10: engine/save/save.go                                                                                                                                                       │
+│                                                                                                                                                                                     │
+│ JSON serialize/deserialize (DESIGN.md §12).                                                                                                                                         │
+│                                                                                                                                                                                     │
+│ API                                                                                                                                                                                 │
+│                                                                                                                                                                                     │
+│ // SaveData is the JSON-serializable save format.                                                                                                                                   │
+│ type SaveData struct {                                                                                                                                                              │
+│     Version     string                    `json:"version"`                                                                                                                          │
+│     Game        string                    `json:"game"`                                                                                                                             │
+│     Turn        int                       `json:"turn"`                                                                                                                             │
+│     Player      types.Player              `json:"player"`                                                                                                                           │
+│     Flags       map[string]bool           `json:"flags"`                                                                                                                            │
+│     Counters    map[string]int            `json:"counters"`                                                                                                                         │
+│     EntityState map[string]types.EntityState `json:"entity_state"`                                                                                                                  │
+│     RNGSeed     int64                     `json:"rng_seed"`                                                                                                                         │
+│     CommandLog  []string                  `json:"command_log"`                                                                                                                      │
+│ }                                                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ // Save serializes game state to JSON bytes.                                                                                                                                        │
+│ func Save(s *types.State, defs *state.Defs) ([]byte, error)                                                                                                                         │
+│                                                                                                                                                                                     │
+│ // Load deserializes JSON bytes into game state.                                                                                                                                    │
+│ func Load(data []byte) (*SaveData, error)                                                                                                                                           │
+│                                                                                                                                                                                     │
+│ // ApplySave applies loaded save data onto a fresh state.                                                                                                                           │
+│ func ApplySave(s *types.State, save *SaveData)                                                                                                                                      │
+│                                                                                                                                                                                     │
+│ Logic                                                                                                                                                                               │
+│                                                                                                                                                                                     │
+│ - Save: marshal State fields into SaveData (version + game from defs)                                                                                                               │
+│ - Load: unmarshal JSON → SaveData                                                                                                                                                   │
+│ - ApplySave: overwrite state fields from save data                                                                                                                                  │
+│                                                                                                                                                                                     │
+│ Tests (engine/save/save_test.go)                                                                                                                                                    │
+│                                                                                                                                                                                     │
+│ - Round-trip: save → load → state matches original                                                                                                                                  │
+│ - Save produces valid JSON                                                                                                                                                          │
+│ - Load handles missing optional fields                                                                                                                                              │
+│ - EntityState overrides preserved through round-trip                                                                                                                                │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ Layer 11: engine/engine.go                                                                                                                                                          │
+│                                                                                                                                                                                     │
+│ The Step() orchestrator wiring everything together (DESIGN.md §2-3).                                                                                                                │
+│                                                                                                                                                                                     │
+│ API                                                                                                                                                                                 │
+│                                                                                                                                                                                     │
+│ // Engine holds the game definitions and mutable state.                                                                                                                             │
+│ type Engine struct {                                                                                                                                                                │
+│     Defs  *state.Defs                                                                                                                                                               │
+│     State *types.State                                                                                                                                                              │
+│ }                                                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ // New creates a new engine from definitions.                                                                                                                                       │
+│ func New(defs *state.Defs) *Engine                                                                                                                                                  │
+│                                                                                                                                                                                     │
+│ // Step processes one player command and returns the result.                                                                                                                        │
+│ func (e *Engine) Step(input string) types.Result                                                                                                                                    │
+│                                                                                                                                                                                     │
+│ Step() flow                                                                                                                                                                         │
+│                                                                                                                                                                                     │
+│ 1.  Parse input → Intent                                                                                                                                                            │
+│ 2.  Append input to CommandLog                                                                                                                                                      │
+│ 3.  Handle empty input → prompt                                                                                                                                                     │
+│ 4.  Determine resolution strategy based on verb:                                                                                                                                    │
+│     - "go": skip entity resolution, pass direction as objectID                                                                                                                      │
+│     - "inventory", "look" (no object): skip resolution                                                                                                                              │
+│     - "talk": resolve NPC, invoke dialogue                                                                                                                                          │
+│     - everything else: resolve entities                                                                                                                                             │
+│ 5.  If resolve error → return error message                                                                                                                                         │
+│ 6.  Run rules.Evaluate(state, defs, intent, objectID, targetID)                                                                                                                     │
+│ 7.  If matched → apply effects                                                                                                                                                      │
+│     If not matched → built-in behavior:                                                                                                                                             │
+│       - "go": check exits, produce MovePlayer + room description                                                                                                                    │
+│       - "look" (no object): describe room + entities + exits                                                                                                                        │
+│       - "inventory": list inventory                                                                                                                                                 │
+│       - "examine": show entity description                                                                                                                                          │
+│       - "take": give item if takeable                                                                                                                                               │
+│       - "drop": remove item if in inventory                                                                                                                                         │
+│       - else: use fallback from Evaluate                                                                                                                                            │
+│ 8.  Apply effects → events + output                                                                                                                                                 │
+│ 9.  Dispatch events (single pass) → more effects                                                                                                                                    │
+│ 10. Apply event effects → more events + more output (events NOT re-dispatched)                                                                                                      │
+│ 11. Increment TurnCount                                                                                                                                                             │
+│ 12. Return Result                                                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ Built-in verb handling                                                                                                                                                              │
+│                                                                                                                                                                                     │
+│ For verbs where the rules pipeline returned no match, the engine provides                                                                                                           │
+│ default behavior. This is the built-in game logic for MVP:                                                                                                                          │
+│                                                                                                                                                                                     │
+│ - go: Check state.RoomExits for the direction. If valid exit → MovePlayer + describe new room. If not → "You can't go that way."                                                    │
+│ - look (no object): Describe room, list visible entities, list exits.                                                                                                               │
+│ - inventory: Format inventory list.                                                                                                                                                 │
+│ - examine (resolved entity): Show entity description from props.                                                                                                                    │
+│ - take (resolved entity): Check takeable prop, give item.                                                                                                                           │
+│ - drop (resolved entity): Check inventory, remove item, place in room.                                                                                                              │
+│                                                                                                                                                                                     │
+│ These built-ins are only used when NO rule matched. Room/entity/global rules                                                                                                        │
+│ always take precedence (first match wins).                                                                                                                                          │
+│                                                                                                                                                                                     │
+│ Tests (engine/engine_test.go)                                                                                                                                                       │
+│                                                                                                                                                                                     │
+│ Integration-level tests with a small test game:                                                                                                                                     │
+│ - Step with "go north" → moves player, shows room description                                                                                                                       │
+│ - Step with "go" to invalid direction → "can't go that way"                                                                                                                         │
+│ - Step with "take key" → key in inventory                                                                                                                                           │
+│ - Step with "look" → room description                                                                                                                                               │
+│ - Step with "inventory" → inventory list                                                                                                                                            │
+│ - Rule override: room rule for "take key" beats built-in                                                                                                                            │
+│ - Event handler fires after effect                                                                                                                                                  │
+│ - Turn counter increments                                                                                                                                                           │
+│ - Command logged                                                                                                                                                                    │
+│                                                                                                                                                                                     │
+│ ---                                                                                                                                                                                 │
+│ File List                                                                                                                                                                           │
+│                                                                                                                                                                                     │
+│ Modified:                                                                                                                                                                           │
+│   types/types.go                   # Add TopicDef, Topics field on EntityDef                                                                                                        │
+│   engine/rules/rules.go            # Evaluate returns (effects, matched bool)                                                                                                       │
+│   engine/rules/rules_test.go       # Update for new return value                                                                                                                    │
+│                                                                                                                                                                                     │
+│ New:                                                                                                                                                                                │
+│   engine/events/events.go                                                                                                                                                           │
+│   engine/events/events_test.go                                                                                                                                                      │
+│   engine/dialogue/dialogue.go                                                                                                                                                       │
+│   engine/dialogue/dialogue_test.go                                                                                                                                                  │
+│   engine/save/save.go                                                                                                                                                               │
+│   engine/save/save_test.go                                                                                                                                                          │
+│   engine/engine.go                                                                                                                                                                  │
+│   engine/engine_test.go                                                                                                                                                             │
+│                                                                                                                                                                                     │
+│ Build Order                                                                                                                                                                         │
+│                                                                                                                                                                                     │
+│ 1. Type additions (TopicDef, EntityDef.Topics)                                                                                                                                      │
+│ 2. Modify rules.Evaluate return signature                                                                                                                                           │
+│ 3. engine/events/ — small, independent                                                                                                                                              │
+│ 4. engine/dialogue/ — small, independent                                                                                                                                            │
+│ 5. engine/save/ — small, independent                                                                                                                                                │
+│ 6. engine/engine.go — depends on all of the above                                                                                                                                   │
+│                                                                                                                                                                                     │
+│ Steps 3-5 are independent and can be written in sequence quickly.                                                                                                                   │
+│                                                                                                                                                                                     │
+│ Verification                                                                                                                                                                        │
+│                                                                                                                                                                                     │
+│ 1. go build ./...                                                                                                                                                                   │
+│ 2. go vet ./...                                                                                                                                                                     │
+│ 3. go test ./... -v -count=1 — all existing 133 + new tests pass
