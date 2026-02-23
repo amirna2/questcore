@@ -10,6 +10,10 @@
 ### Tests Not Performed
 <!-- REQUIRED: What tests were not performed? Maybe due to dependencies, or environment? -->
 
+### CI Checks
+<!-- CI runs automatically. All checks must pass before merge. -->
+- [ ] `make ci` passes locally
+
 ### AI Assisted
 <!-- REQUIRED -->
 - [ ] Yes
