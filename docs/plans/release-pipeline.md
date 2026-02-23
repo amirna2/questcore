@@ -2,31 +2,34 @@
 
 ## Goal
 
-Add a tag-triggered release workflow using GitHub's native release process.
-Push a semver tag → CI runs → GitHub Release created with auto-generated notes.
+Automate versioning, changelog, and GitHub Releases from conventional commits.
 
-## Approach
+## How It Works
 
-- `.github/release.yml` configures how GitHub categorizes PRs in release notes
-- `.github/workflows/release.yml` triggers on `v*` tags, runs `make ci`, then
-  creates a GitHub Release via `gh release create --generate-notes`
-- Version/commit/date embedded in binary via ldflags (`--version` flag)
-- Makefile `build` target updated to inject git info automatically
+1. PRs use conventional commit titles (`feat:`, `fix:`, `chore:`, etc.)
+2. Squash merge with "PR title + commit details" — the PR title becomes the
+   conventional commit message on main
+3. When ready to release, push a semver tag (`git tag v0.1.0 && git push --tags`)
+4. Release workflow runs `make ci`, then generates CHANGELOG via
+   conventional-changelog and creates a GitHub Release
+5. PR title format is enforced by the semantic-pull-request action
 
 ## Files
 
 | File | Action |
 |------|--------|
-| `.github/release.yml` | Create — release notes categories |
 | `.github/workflows/release.yml` | Create — tag-triggered release workflow |
+| `.github/workflows/pr-title.yml` | Create — enforce conventional commit PR titles |
 | `cmd/questcore/main.go` | Update — version vars + `--version` flag |
 | `Makefile` | Update — ldflags in build target |
+| `package.json` | Create — conventional-changelog dependency |
 
 ## Task List
 
 - [ ] Add version vars and `--version` flag to `cmd/questcore/main.go`
 - [ ] Update Makefile build target with ldflags
-- [ ] Create `.github/release.yml`
+- [ ] Create `.github/workflows/pr-title.yml` (semantic-pull-request)
+- [ ] Set up conventional-changelog
 - [ ] Create `.github/workflows/release.yml`
 - [ ] Verify `make ci` passes
 - [ ] Push branch, open PR
