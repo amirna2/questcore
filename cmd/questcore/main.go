@@ -1,5 +1,5 @@
 // QuestCore is a deterministic, data-driven game engine for text adventures.
-// Usage: questcore [--plain] <game_directory>
+// Usage: questcore [--version] [--plain] <game_directory>
 package main
 
 import (
@@ -12,12 +12,22 @@ import (
 	"github.com/nathoo/questcore/tui"
 )
 
+// Set via -ldflags at build time.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	plain := false
 	var gameDir string
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
+		case "--version":
+			fmt.Printf("questcore %s (commit %s, built %s)\n", version, commit, date)
+			return
 		case "--plain":
 			plain = true
 		default:
@@ -28,7 +38,7 @@ func main() {
 	}
 
 	if gameDir == "" {
-		fmt.Fprintf(os.Stderr, "Usage: questcore [--plain] <game_directory>\n")
+		fmt.Fprintf(os.Stderr, "Usage: questcore [--version] [--plain] <game_directory>\n")
 		os.Exit(1)
 	}
 
