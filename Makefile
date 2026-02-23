@@ -7,11 +7,16 @@ GO      := go
 GOFLAGS := -v
 TIMEOUT := 120s
 
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
+
 .PHONY: build test lint vet fmt-check fmt ci clean
 
-## build: Compile the questcore binary
+## build: Compile the questcore binary with version info
 build:
-	$(GO) build $(GOFLAGS) -o $(BINARY) ./cmd/questcore
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/questcore
 
 ## test: Run all tests with race detection
 test:
