@@ -28,8 +28,8 @@ type rawLine struct {
 
 // Model is the Bubble Tea model for the QuestCore TUI.
 type Model struct {
-	engine  *engine.Engine
-	defs    *state.Defs
+	engine *engine.Engine
+	defs   *state.Defs
 
 	viewport viewport.Model
 	input    textinput.Model
@@ -492,11 +492,11 @@ func (m *Model) formatTrace(result types.Result) []string {
 // (we use those for input history).
 func viewportKeyMap() viewport.KeyMap {
 	return viewport.KeyMap{
-		PageDown: key.NewBinding(key.WithKeys("pgdown")),
-		PageUp:   key.NewBinding(key.WithKeys("pgup")),
+		PageDown:     key.NewBinding(key.WithKeys("pgdown")),
+		PageUp:       key.NewBinding(key.WithKeys("pgup")),
 		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+d")),
 		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u")),
-		Up:   key.NewBinding(key.WithDisabled()),
-		Down: key.NewBinding(key.WithDisabled()),
+		Up:           key.NewBinding(key.WithDisabled()),
+		Down:         key.NewBinding(key.WithDisabled()),
 	}
 }

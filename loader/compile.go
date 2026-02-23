@@ -19,8 +19,8 @@ type rawRoom struct {
 
 // rawEntity holds an entity table before compilation.
 type rawEntity struct {
-	id   string
-	kind string
+	id    string
+	kind  string
 	table *lua.LTable
 }
 
@@ -258,8 +258,8 @@ func compileRoom(raw rawRoom) (types.RoomDef, []string, error) {
 func compileEntity(raw rawEntity) (types.EntityDef, []string, error) {
 	tbl := raw.table
 	entity := types.EntityDef{
-		ID:   raw.id,
-		Kind: raw.kind,
+		ID:    raw.id,
+		Kind:  raw.kind,
 		Props: map[string]any{},
 	}
 
@@ -349,9 +349,9 @@ func compileRule(raw rawRule) (types.RuleDef, error) {
 
 func compileMatchCriteria(tbl *lua.LTable) types.MatchCriteria {
 	mc := types.MatchCriteria{
-		Verb:   getString(tbl, "verb"),
-		Object: getString(tbl, "object"),
-		Target: getString(tbl, "target"),
+		Verb:       getString(tbl, "verb"),
+		Object:     getString(tbl, "object"),
+		Target:     getString(tbl, "target"),
 		ObjectKind: getString(tbl, "object_kind"),
 	}
 	if tp := getTable(tbl, "target_prop"); tp != nil {

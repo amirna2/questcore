@@ -59,9 +59,9 @@ func TestContainsQuotedSpeech(t *testing.T) {
 		want bool
 	}{
 		{"'Hello, adventurer. Welcome to the castle.'", true},
-		{"It's a door.", false},            // short quote segment
-		{"No quotes here.", false},         // no quotes at all
-		{"'Hi'", false},                    // too short
+		{"It's a door.", false},    // short quote segment
+		{"No quotes here.", false}, // no quotes at all
+		{"'Hi'", false},            // too short
 		{"She says 'the crown is lost forever, you must find it.'", true},
 	}
 	for _, tt := range tests {
