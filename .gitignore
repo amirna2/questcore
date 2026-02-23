@@ -1,5 +1,6 @@
 # Compiled binaries
 /questcore
+/bin/
 *.exe
 *.dll
 *.so

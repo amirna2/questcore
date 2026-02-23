@@ -22,33 +22,33 @@ func (e *ValidationError) Error() string {
 
 // Known effect types.
 var validEffectTypes = map[string]bool{
-	"say":             true,
-	"give_item":       true,
-	"remove_item":     true,
-	"set_flag":        true,
-	"inc_counter":     true,
-	"set_counter":     true,
-	"set_prop":        true,
-	"move_entity":     true,
-	"move_player":     true,
-	"open_exit":       true,
-	"close_exit":      true,
-	"emit_event":      true,
-	"start_dialogue":  true,
-	"stop":            true,
+	"say":            true,
+	"give_item":      true,
+	"remove_item":    true,
+	"set_flag":       true,
+	"inc_counter":    true,
+	"set_counter":    true,
+	"set_prop":       true,
+	"move_entity":    true,
+	"move_player":    true,
+	"open_exit":      true,
+	"close_exit":     true,
+	"emit_event":     true,
+	"start_dialogue": true,
+	"stop":           true,
 }
 
 // Known condition types.
 var validConditionTypes = map[string]bool{
-	"has_item":    true,
-	"flag_set":    true,
-	"flag_not":    true,
-	"flag_is":     true,
-	"in_room":     true,
-	"prop_is":     true,
-	"counter_gt":  true,
-	"counter_lt":  true,
-	"not":         true,
+	"has_item":   true,
+	"flag_set":   true,
+	"flag_not":   true,
+	"flag_is":    true,
+	"in_room":    true,
+	"prop_is":    true,
+	"counter_gt": true,
+	"counter_lt": true,
+	"not":        true,
 }
 
 // validate checks the compiled defs for referential integrity and consistency.

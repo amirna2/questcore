@@ -67,9 +67,9 @@ type TopicDef struct {
 // EntityDef is the base definition of a world entity (item, NPC, etc.).
 type EntityDef struct {
 	ID     string
-	Kind   string            // "item", "npc", "entity", "room"
-	Props  map[string]any    // base properties from Lua
-	Rules  []RuleDef         // rules scoped to this entity
+	Kind   string              // "item", "npc", "entity", "room"
+	Props  map[string]any      // base properties from Lua
+	Rules  []RuleDef           // rules scoped to this entity
 	Topics map[string]TopicDef // NPC topics (nil for non-NPCs)
 }
 
