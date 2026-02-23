@@ -1,0 +1,31 @@
+version: "2"
+
+run:
+  timeout: 3m
+  go: "1.24"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - misspell
+
+  settings:
+    gocritic:
+      disabled-checks:
+        - captLocal  # L is conventional in gopher-lua codebases
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
