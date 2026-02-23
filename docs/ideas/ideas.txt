@@ -1,0 +1,60 @@
+⏺ Here's where things stand and some ideas for what's next.
+
+  Current Status: MVP is Done
+
+  All 14 layers from the build order are implemented and tested (~325 tests passing). The engine runs end-to-end, the Lost Crown example game is playable, CI/CD is set up,
+   and there's both a plain CLI and a Bubble Tea TUI. Architecturally, it's clean — all the invariants are holding.
+
+  So the question is really: what do you want QuestCore to become next?
+
+  ---
+  Brainstorm: Possible Directions
+
+  1. Prove the engine with a second game
+
+  The Lost Crown is a good demo, but a second game with a different flavor (puzzle-heavy, comedy, dungeon crawl) would stress-test the engine and prove it's truly generic.
+   This would also surface any rough edges in the Lua API.
+
+  2. Game creator documentation
+
+  Right now someone wanting to write a game in QuestCore would need to reverse-engineer the Lua API from lost_crown/ and loader/api.go. A proper Lua content authoring
+  guide would make this usable by others.
+
+  3. Deterministic replay testing
+
+  The CLAUDE.md testing strategy calls for "load game, play a sequence, record output, replay, verify identical output." This is a powerful correctness guarantee that
+  isn't explicitly implemented yet as a dedicated test harness.
+
+  4. TUI polish
+
+  The TUI works but could benefit from: richer text formatting (bold/italic for emphasis in descriptions), a help overlay, maybe a side panel for inventory/exits so the
+  player doesn't have to type inventory constantly.
+
+  5. v2 engine features
+
+  The design doc scopes these out, but they'd be meaty work:
+  - Combat system — health, damage, turn-based encounters
+  - Container entities — bags, chests, nested inventories
+  - Randomness — dice rolls, random encounters (RNG seed is already in state)
+  - Timed events — things that happen after N turns
+
+  6. Distribution & packaging
+
+  Homebrew formula, multi-platform release binaries via GoReleaser, maybe even a WASM build for browser play.
+
+  7. questcore new scaffolding
+
+  A CLI subcommand that generates a starter game directory with boilerplate Lua files — lowers the barrier for new game creators.
+
+  ---
+  My Recommendation
+
+  If I had to pick an order of bang-for-buck:
+
+  1. Second game — it's the best way to find real problems. Nothing validates an engine like actually using it.
+  2. Deterministic replay tests — cheap to build, huge confidence boost, and it's a stated goal.
+  3. Lua authoring docs — makes the project usable by anyone beyond us.
+
+  The v2 features (combat, containers, etc.) are exciting but probably premature until the core is battle-tested with more content.
+
+  What resonates? Or is there something else entirely you've been thinking about?

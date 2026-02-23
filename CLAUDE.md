@@ -29,6 +29,14 @@ You are operating as:
   code. You respect module boundaries, avoid circular dependencies, and keep
   the dependency graph clean.
 
+## Development Invariants (do not violate)
+1. **Always plan before significant code changes.** For any change that affects architecture, data model, or public interfaces, discuss and document the plan in `docs/plans` before writing code. This ensures alignment and prevents wasted effort.
+2. **Always include a task list in the plan.** Each plan must have a clear, actionable task list that breaks down the implementation into discrete steps. This provides a roadmap for development and makes it easier to track progress.
+3. **Always create or update unit tests for new code.** Every new function, method, or significant code block must have corresponding unit tests that verify its correctness. This ensures that the code is reliable and maintainable. See the "Testing Strategy" section below for details on what and how to test.
+4. **Always work in feature branches.** All development must occur in branches off of `main`. This allows for code review, testing, and integration without affecting the stability of the main branch.
+5. **Pull Requests** Always follow the PR template when creating a pull request. Include a link to the relevant plan in `docs/plans`, a summary of changes, and any relevant context for reviewers.
+6. **Conventional commits.** Follow conventional commit messages for both commits AND PR Titles (e.g., `feat: add TUI mode`, `fix: correct state mutation in ApplyEffects`, `test: add tests for parser edge cases`). This helps maintain a clear project history.
+
 ## Architecture Invariants (do not violate)
 
 These are non-negotiable. If a change would break one of these, it's wrong.
