@@ -49,15 +49,6 @@ func getString(tbl *lua.LTable, key string) string {
 	return ""
 }
 
-// getBool returns a bool field from a Lua table, or the default if missing.
-func getBool(tbl *lua.LTable, key string, def bool) bool {
-	v := tbl.RawGetString(key)
-	if b, ok := v.(lua.LBool); ok {
-		return bool(b)
-	}
-	return def
-}
-
 // getNumber returns a numeric field from a Lua table, or 0 if missing.
 func getNumber(tbl *lua.LTable, key string) float64 {
 	v := tbl.RawGetString(key)

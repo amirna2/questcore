@@ -103,11 +103,6 @@ func styledYouSee(line string) string {
 	return styleRoomDesc.Render(prefix) + styleYouSee.Render(line[len(prefix):])
 }
 
-// styledPlayerInput renders the echoed player input in green with "> " prefix.
-func styledPlayerInput(input string) string {
-	return stylePlayerInput.Render("> " + input)
-}
-
 // styledSystemMsg renders a system message in gray with brackets.
 func styledSystemMsg(text string) string {
 	return styleSystem.Render("[" + text + "]")

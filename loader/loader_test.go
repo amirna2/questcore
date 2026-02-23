@@ -139,10 +139,8 @@ func TestLoad_FullGame(t *testing.T) {
 	// Handlers.
 	if len(defs.Handlers) != 1 {
 		t.Errorf("expected 1 handler, got %d", len(defs.Handlers))
-	} else {
-		if defs.Handlers[0].EventType != "door_unlocked" {
-			t.Errorf("handler event = %q", defs.Handlers[0].EventType)
-		}
+	} else if defs.Handlers[0].EventType != "door_unlocked" {
+		t.Errorf("handler event = %q", defs.Handlers[0].EventType)
 	}
 }
 
