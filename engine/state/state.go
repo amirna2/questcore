@@ -15,11 +15,15 @@ type Defs struct {
 
 // NewState creates a fresh game state from definitions.
 func NewState(defs *Defs) *types.State {
+	stats := map[string]int{}
+	for k, v := range defs.Game.PlayerStats {
+		stats[k] = v
+	}
 	return &types.State{
 		Player: types.Player{
 			Location:  defs.Game.Start,
 			Inventory: []string{},
-			Stats:     map[string]int{},
+			Stats:     stats,
 		},
 		Entities:   map[string]types.EntityState{},
 		Flags:      map[string]bool{},
@@ -100,6 +104,58 @@ func EntitiesInRoom(s *types.State, defs *Defs, roomID string) []string {
 		}
 	}
 	return result
+}
+
+// InCombat returns true if the player is currently in combat.
+func InCombat(s *types.State) bool {
+	return s.Combat.Active
+}
+
+// GetStat reads a stat for the given target. Target is "player" or an entity ID.
+// For player: reads from s.Player.Stats.
+// For entity: reads from EntityState.Props (runtime override), then EntityDef.Props (base).
+// Returns the value and whether it was found.
+func GetStat(s *types.State, defs *Defs, target string, stat string) (int, bool) {
+	if target == "player" {
+		v, ok := s.Player.Stats[stat]
+		return v, ok
+	}
+	val, ok := GetEntityProp(s, defs, target, stat)
+	if !ok {
+		return 0, false
+	}
+	return toInt(val)
+}
+
+// SetStat writes a stat for the given target. Target is "player" or an entity ID.
+func SetStat(s *types.State, target string, stat string, value int) {
+	if target == "player" {
+		if s.Player.Stats == nil {
+			s.Player.Stats = map[string]int{}
+		}
+		s.Player.Stats[stat] = value
+		return
+	}
+	es := s.Entities[target]
+	if es.Props == nil {
+		es.Props = map[string]any{}
+	}
+	es.Props[stat] = value
+	s.Entities[target] = es
+}
+
+// toInt coerces a value to int. Handles int, float64 (from JSON/Lua), and int64.
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case float64:
+		return int(n), true
+	case int64:
+		return int(n), true
+	default:
+		return 0, false
+	}
 }
 
 // RoomExits returns the effective exits for a room. Runtime exit overrides

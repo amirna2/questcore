@@ -63,6 +63,17 @@ func registerConstructors(L *lua.LState, coll *collector) {
 		return 1
 	}))
 
+	// Enemy "id" { ... } — curried, kind = "enemy".
+	L.SetGlobal("Enemy", L.NewFunction(func(L *lua.LState) int {
+		id := L.CheckString(1)
+		L.Push(L.NewFunction(func(L *lua.LState) int {
+			tbl := L.CheckTable(1)
+			coll.entities = append(coll.entities, rawEntity{id: id, kind: "enemy", table: tbl})
+			return 0
+		}))
+		return 1
+	}))
+
 	// Rule("id", when, conditions, then)
 	// conditions may be nil.
 	// Returns a marker table with __rule_id for scoping.
@@ -228,6 +239,52 @@ func registerConditionHelpers(L *lua.LState) {
 		L.Push(tbl)
 		return 1
 	}))
+
+	// InCombat()
+	L.SetGlobal("InCombat", L.NewFunction(func(L *lua.LState) int {
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("in_combat"))
+		L.Push(tbl)
+		return 1
+	}))
+
+	// InCombatWith("entity_id")
+	L.SetGlobal("InCombatWith", L.NewFunction(func(L *lua.LState) int {
+		entity := L.CheckString(1)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("in_combat_with"))
+		tbl.RawSetString("entity", lua.LString(entity))
+		L.Push(tbl)
+		return 1
+	}))
+
+	// StatGt("entity_or_player", "stat", value)
+	L.SetGlobal("StatGt", L.NewFunction(func(L *lua.LState) int {
+		entity := L.CheckString(1)
+		stat := L.CheckString(2)
+		value := L.CheckNumber(3)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("stat_gt"))
+		tbl.RawSetString("entity", lua.LString(entity))
+		tbl.RawSetString("stat", lua.LString(stat))
+		tbl.RawSetString("value", value)
+		L.Push(tbl)
+		return 1
+	}))
+
+	// StatLt("entity_or_player", "stat", value)
+	L.SetGlobal("StatLt", L.NewFunction(func(L *lua.LState) int {
+		entity := L.CheckString(1)
+		stat := L.CheckString(2)
+		value := L.CheckNumber(3)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("stat_lt"))
+		tbl.RawSetString("entity", lua.LString(entity))
+		tbl.RawSetString("stat", lua.LString(stat))
+		tbl.RawSetString("value", value)
+		L.Push(tbl)
+		return 1
+	}))
 }
 
 func registerEffectHelpers(L *lua.LState) {
@@ -383,6 +440,62 @@ func registerEffectHelpers(L *lua.LState) {
 	L.SetGlobal("Stop", L.NewFunction(func(L *lua.LState) int {
 		tbl := L.NewTable()
 		tbl.RawSetString("type", lua.LString("stop"))
+		L.Push(tbl)
+		return 1
+	}))
+
+	// StartCombat("enemy_id")
+	L.SetGlobal("StartCombat", L.NewFunction(func(L *lua.LState) int {
+		enemy := L.CheckString(1)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("start_combat"))
+		tbl.RawSetString("enemy", lua.LString(enemy))
+		L.Push(tbl)
+		return 1
+	}))
+
+	// EndCombat()
+	L.SetGlobal("EndCombat", L.NewFunction(func(L *lua.LState) int {
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("end_combat"))
+		L.Push(tbl)
+		return 1
+	}))
+
+	// Damage("target", amount)
+	L.SetGlobal("Damage", L.NewFunction(func(L *lua.LState) int {
+		target := L.CheckString(1)
+		amount := L.CheckNumber(2)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("damage"))
+		tbl.RawSetString("target", lua.LString(target))
+		tbl.RawSetString("amount", amount)
+		L.Push(tbl)
+		return 1
+	}))
+
+	// Heal("target", amount)
+	L.SetGlobal("Heal", L.NewFunction(func(L *lua.LState) int {
+		target := L.CheckString(1)
+		amount := L.CheckNumber(2)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("heal"))
+		tbl.RawSetString("target", lua.LString(target))
+		tbl.RawSetString("amount", amount)
+		L.Push(tbl)
+		return 1
+	}))
+
+	// SetStat("target", "stat", value)
+	L.SetGlobal("SetStat", L.NewFunction(func(L *lua.LState) int {
+		target := L.CheckString(1)
+		stat := L.CheckString(2)
+		value := L.CheckNumber(3)
+		tbl := L.NewTable()
+		tbl.RawSetString("type", lua.LString("set_stat"))
+		tbl.RawSetString("target", lua.LString(target))
+		tbl.RawSetString("stat", lua.LString(stat))
+		tbl.RawSetString("value", value)
 		L.Push(tbl)
 		return 1
 	}))

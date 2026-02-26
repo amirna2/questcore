@@ -187,3 +187,102 @@ func TestEvalAllConditions_Empty(t *testing.T) {
 		t.Error("expected empty conditions to pass")
 	}
 }
+
+// --- Combat condition tests ---
+
+func combatCondTestState() (*types.State, *state.Defs) {
+	defs := &state.Defs{
+		Game: types.GameDef{
+			Start:       "cave",
+			PlayerStats: map[string]int{"hp": 20, "max_hp": 20, "attack": 5, "defense": 2},
+		},
+		Rooms: map[string]types.RoomDef{
+			"cave": {ID: "cave"},
+		},
+		Entities: map[string]types.EntityDef{
+			"goblin": {
+				ID:   "goblin",
+				Kind: "enemy",
+				Props: map[string]any{
+					"hp": 12, "max_hp": 12, "attack": 4, "defense": 1,
+				},
+			},
+		},
+	}
+	s := state.NewState(defs)
+	s.Combat.Active = true
+	s.Combat.EnemyID = "goblin"
+	return s, defs
+}
+
+func TestCombatConditions(t *testing.T) {
+	s, defs := combatCondTestState()
+
+	tests := []struct {
+		name string
+		cond types.Condition
+		want bool
+	}{
+		{
+			name: "in_combat: active",
+			cond: types.Condition{Type: "in_combat"},
+			want: true,
+		},
+		{
+			name: "in_combat_with: correct enemy",
+			cond: types.Condition{Type: "in_combat_with", Params: map[string]any{"entity": "goblin"}},
+			want: true,
+		},
+		{
+			name: "in_combat_with: wrong enemy",
+			cond: types.Condition{Type: "in_combat_with", Params: map[string]any{"entity": "dragon"}},
+			want: false,
+		},
+		{
+			name: "stat_gt: player hp > 10",
+			cond: types.Condition{Type: "stat_gt", Params: map[string]any{"entity": "player", "stat": "hp", "value": 10}},
+			want: true,
+		},
+		{
+			name: "stat_gt: player hp > 20 (not greater)",
+			cond: types.Condition{Type: "stat_gt", Params: map[string]any{"entity": "player", "stat": "hp", "value": 20}},
+			want: false,
+		},
+		{
+			name: "stat_lt: goblin hp < 20",
+			cond: types.Condition{Type: "stat_lt", Params: map[string]any{"entity": "goblin", "stat": "hp", "value": 20}},
+			want: true,
+		},
+		{
+			name: "stat_lt: goblin hp < 5 (not less)",
+			cond: types.Condition{Type: "stat_lt", Params: map[string]any{"entity": "goblin", "stat": "hp", "value": 5}},
+			want: false,
+		},
+		{
+			name: "stat_gt: missing stat returns false",
+			cond: types.Condition{Type: "stat_gt", Params: map[string]any{"entity": "goblin", "stat": "magic", "value": 0}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EvalCondition(tt.cond, s, defs)
+			if got != tt.want {
+				t.Errorf("EvalCondition() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCombatConditions_NotInCombat(t *testing.T) {
+	s, defs := combatCondTestState()
+	s.Combat.Active = false
+
+	if EvalCondition(types.Condition{Type: "in_combat"}, s, defs) {
+		t.Error("expected in_combat to be false when not in combat")
+	}
+	if EvalCondition(types.Condition{Type: "in_combat_with", Params: map[string]any{"entity": "goblin"}}, s, defs) {
+		t.Error("expected in_combat_with to be false when not in combat")
+	}
+}

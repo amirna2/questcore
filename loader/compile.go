@@ -210,13 +210,25 @@ func compile(coll *collector) (*state.Defs, error) {
 }
 
 func compileGame(tbl *lua.LTable) types.GameDef {
-	return types.GameDef{
+	g := types.GameDef{
 		Title:   getString(tbl, "title"),
 		Author:  getString(tbl, "author"),
 		Version: getString(tbl, "version"),
 		Start:   getString(tbl, "start"),
 		Intro:   getString(tbl, "intro"),
 	}
+	// Player stats for combat.
+	if statsTbl := getTable(tbl, "player_stats"); statsTbl != nil {
+		g.PlayerStats = map[string]int{}
+		statsTbl.ForEach(func(k, v lua.LValue) {
+			if ks, ok := k.(lua.LString); ok {
+				if n, ok := v.(lua.LNumber); ok {
+					g.PlayerStats[string(ks)] = int(n)
+				}
+			}
+		})
+	}
+	return g
 }
 
 // compileRoom compiles a raw room into a RoomDef and returns rule IDs scoped to it.
@@ -254,9 +266,15 @@ func compileEntity(raw rawEntity) (types.EntityDef, []string, error) {
 		Props: map[string]any{},
 	}
 
-	// Special fields that don't go into Props.
+	// Special fields that don't go into Props (handled separately).
 	skip := map[string]bool{
 		"rules": true, "topics": true,
+	}
+	// For enemies, stats/behavior/loot are compiled into typed structs.
+	if raw.kind == "enemy" {
+		skip["stats"] = true
+		skip["behavior"] = true
+		skip["loot"] = true
 	}
 
 	// All non-special fields go into Props.
@@ -274,6 +292,11 @@ func compileEntity(raw rawEntity) (types.EntityDef, []string, error) {
 		if _, ok := entity.Props["takeable"]; !ok {
 			entity.Props["takeable"] = true
 		}
+	}
+
+	// Enemy: compile stats, behavior, loot into Props.
+	if raw.kind == "enemy" {
+		compileEnemyProps(tbl, entity.Props)
 	}
 
 	// Topics for NPCs.
@@ -295,6 +318,67 @@ func compileEntity(raw rawEntity) (types.EntityDef, []string, error) {
 	}
 
 	return entity, scopedIDs, nil
+}
+
+// compileEnemyProps extracts enemy stats, behavior, and loot into flat Props.
+func compileEnemyProps(tbl *lua.LTable, props map[string]any) {
+	// Stats: flatten into props.
+	if statsTbl := getTable(tbl, "stats"); statsTbl != nil {
+		statsTbl.ForEach(func(k, v lua.LValue) {
+			if ks, ok := k.(lua.LString); ok {
+				if n, ok := v.(lua.LNumber); ok {
+					props[string(ks)] = int(n)
+				}
+			}
+		})
+	}
+
+	// Set alive = true by default.
+	if _, exists := props["alive"]; !exists {
+		props["alive"] = true
+	}
+
+	// Behavior: compile to []types.BehaviorEntry.
+	if behaviorTbl := getTable(tbl, "behavior"); behaviorTbl != nil {
+		var behavior []types.BehaviorEntry
+		behaviorTbl.ForEach(func(k, v lua.LValue) {
+			if _, ok := k.(lua.LNumber); !ok {
+				return
+			}
+			if entryTbl, ok := v.(*lua.LTable); ok {
+				entry := types.BehaviorEntry{
+					Action: getString(entryTbl, "action"),
+					Weight: getInt(entryTbl, "weight"),
+				}
+				behavior = append(behavior, entry)
+			}
+		})
+		props["behavior"] = behavior
+	}
+
+	// Loot: compile to []types.LootEntry + loot_gold.
+	if lootTbl := getTable(tbl, "loot"); lootTbl != nil {
+		if itemsTbl := getTable(lootTbl, "items"); itemsTbl != nil {
+			var lootItems []types.LootEntry
+			itemsTbl.ForEach(func(k, v lua.LValue) {
+				if _, ok := k.(lua.LNumber); !ok {
+					return
+				}
+				if entryTbl, ok := v.(*lua.LTable); ok {
+					entry := types.LootEntry{
+						ItemID: getString(entryTbl, "id"),
+						Chance: getInt(entryTbl, "chance"),
+					}
+					lootItems = append(lootItems, entry)
+				}
+			})
+			props["loot_items"] = lootItems
+		}
+		gold := getInt(lootTbl, "gold")
+		if gold > 0 {
+			props["loot_gold"] = gold
+		}
+	}
 }
 
 func compileTopics(tbl *lua.LTable) map[string]types.TopicDef {

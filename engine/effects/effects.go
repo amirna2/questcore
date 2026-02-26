@@ -15,6 +15,7 @@ type Context struct {
 	Verb     string
 	ObjectID string
 	TargetID string
+	Actor    string // "player" or entity ID of the acting combatant
 }
 
 // Apply applies a list of effects to the game state, mutating it.
@@ -144,6 +145,76 @@ func Apply(s *types.State, defs *state.Defs, effects []types.Effect, ctx Context
 				Data: map[string]any{"npc": npc},
 			})
 
+		case "start_combat":
+			enemyID, _ := eff.Params["enemy"].(string)
+			s.Combat.Active = true
+			s.Combat.EnemyID = enemyID
+			s.Combat.RoundCount = 0
+			s.Combat.Defending = false
+			s.Combat.PreviousLocation = s.Player.Location
+			// Initialize enemy runtime stats from base def if not already set.
+			initEnemyStats(s, defs, enemyID)
+			events = append(events, types.Event{
+				Type: "combat_started",
+				Data: map[string]any{"enemy": enemyID},
+			})
+
+		case "end_combat":
+			s.Combat = types.CombatState{}
+			events = append(events, types.Event{
+				Type: "combat_ended",
+				Data: map[string]any{},
+			})
+
+		case "damage":
+			target, _ := eff.Params["target"].(string)
+			amount := toInt(eff.Params["amount"])
+			remaining := applyDamage(s, defs, target, amount)
+			events = append(events, types.Event{
+				Type: "entity_damaged",
+				Data: map[string]any{"target": target, "amount": amount, "remaining": remaining},
+			})
+			// Check for death.
+			if remaining <= 0 {
+				if target == "player" {
+					enemyID := s.Combat.EnemyID // capture before clearing
+					s.Flags["game_over"] = true
+					s.Combat = types.CombatState{}
+					events = append(events, types.Event{
+						Type: "player_defeated",
+						Data: map[string]any{"enemy": enemyID},
+					})
+				} else {
+					// Enemy defeated.
+					ensureEntityState(s, target)
+					es := s.Entities[target]
+					if es.Props == nil {
+						es.Props = map[string]any{}
+					}
+					es.Props["alive"] = false
+					s.Entities[target] = es
+					events = append(events, types.Event{
+						Type: "enemy_defeated",
+						Data: map[string]any{"enemy": target},
+					})
+				}
+			}
+
+		case "heal":
+			target, _ := eff.Params["target"].(string)
+			amount := toInt(eff.Params["amount"])
+			current := applyHeal(s, defs, target, amount)
+			events = append(events, types.Event{
+				Type: "entity_healed",
+				Data: map[string]any{"target": target, "amount": amount, "current": current},
+			})
+
+		case "set_stat":
+			target, _ := eff.Params["target"].(string)
+			stat, _ := eff.Params["stat"].(string)
+			value := toInt(eff.Params["value"])
+			state.SetStat(s, target, stat, value)
+
 		case "stop":
 			return events, output
 
@@ -255,4 +326,52 @@ func toInt(v any) int {
 	default:
 		return 0
 	}
+}
+
+// initEnemyStats copies base stats (hp, max_hp, attack, defense) into EntityState
+// if they're not already set as runtime overrides.
+func initEnemyStats(s *types.State, defs *state.Defs, enemyID string) {
+	def, ok := defs.Entities[enemyID]
+	if !ok {
+		return
+	}
+	ensureEntityState(s, enemyID)
+	es := s.Entities[enemyID]
+	if es.Props == nil {
+		es.Props = map[string]any{}
+	}
+	for _, stat := range []string{"hp", "max_hp", "attack", "defense"} {
+		if _, exists := es.Props[stat]; !exists {
+			if v, ok := def.Props[stat]; ok {
+				es.Props[stat] = v
+			}
+		}
+	}
+	if _, exists := es.Props["alive"]; !exists {
+		es.Props["alive"] = true
+	}
+	s.Entities[enemyID] = es
+}
+
+// applyDamage decrements the target's HP, clamping to 0. Returns remaining HP.
+func applyDamage(s *types.State, defs *state.Defs, target string, amount int) int {
+	hp, _ := state.GetStat(s, defs, target, "hp")
+	hp -= amount
+	if hp < 0 {
+		hp = 0
+	}
+	state.SetStat(s, target, "hp", hp)
+	return hp
+}
+
+// applyHeal increments the target's HP, clamping to max_hp. Returns current HP.
+func applyHeal(s *types.State, defs *state.Defs, target string, amount int) int {
+	hp, _ := state.GetStat(s, defs, target, "hp")
+	maxHP, _ := state.GetStat(s, defs, target, "max_hp")
+	hp += amount
+	if maxHP > 0 && hp > maxHP {
+		hp = maxHP
+	}
+	state.SetStat(s, target, "hp", hp)
+	return hp
 }

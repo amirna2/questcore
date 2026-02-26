@@ -341,6 +341,297 @@ func TestApply_UnknownEffect_NoError(t *testing.T) {
 	}
 }
 
+// --- Combat effect tests ---
+
+func combatSetup() (*types.State, *state.Defs, Context) {
+	defs := &state.Defs{
+		Game: types.GameDef{
+			Start:       "hall",
+			PlayerStats: map[string]int{"hp": 20, "max_hp": 20, "attack": 5, "defense": 2},
+		},
+		Rooms: map[string]types.RoomDef{
+			"hall":     {ID: "hall", Exits: map[string]string{"north": "cave"}},
+			"cave":     {ID: "cave"},
+			"entrance": {ID: "entrance"},
+		},
+		Entities: map[string]types.EntityDef{
+			"goblin": {
+				ID:   "goblin",
+				Kind: "enemy",
+				Props: map[string]any{
+					"name": "Cave Goblin", "location": "cave",
+					"hp": 12, "max_hp": 12, "attack": 4, "defense": 1,
+					"alive": true,
+				},
+			},
+		},
+	}
+	s := state.NewState(defs)
+	s.Player.Location = "cave"
+	ctx := Context{Verb: "attack", ObjectID: "goblin", Actor: "player"}
+	return s, defs, ctx
+}
+
+func TestApply_StartCombat(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	effs := []types.Effect{
+		{Type: "start_combat", Params: map[string]any{"enemy": "goblin"}},
+	}
+
+	events, _ := Apply(s, defs, effs, ctx)
+
+	if !s.Combat.Active {
+		t.Error("expected combat to be active")
+	}
+	if s.Combat.EnemyID != "goblin" {
+		t.Errorf("expected enemy goblin, got %q", s.Combat.EnemyID)
+	}
+	if s.Combat.RoundCount != 0 {
+		t.Errorf("expected round 0, got %d", s.Combat.RoundCount)
+	}
+	if s.Combat.PreviousLocation != "cave" {
+		t.Errorf("expected previous location cave, got %q", s.Combat.PreviousLocation)
+	}
+
+	// Enemy stats should be initialized as runtime overrides.
+	es := s.Entities["goblin"]
+	if es.Props["hp"] != 12 {
+		t.Errorf("expected enemy hp 12, got %v", es.Props["hp"])
+	}
+	if es.Props["alive"] != true {
+		t.Errorf("expected enemy alive=true, got %v", es.Props["alive"])
+	}
+
+	// Should emit combat_started event.
+	if len(events) != 1 || events[0].Type != "combat_started" {
+		t.Errorf("expected combat_started event, got %v", events)
+	}
+}
+
+func TestApply_EndCombat(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Combat = types.CombatState{Active: true, EnemyID: "goblin", RoundCount: 3}
+	effs := []types.Effect{
+		{Type: "end_combat"},
+	}
+
+	events, _ := Apply(s, defs, effs, ctx)
+
+	if s.Combat.Active {
+		t.Error("expected combat to be inactive")
+	}
+	if s.Combat.EnemyID != "" {
+		t.Errorf("expected empty enemy ID, got %q", s.Combat.EnemyID)
+	}
+	if len(events) != 1 || events[0].Type != "combat_ended" {
+		t.Errorf("expected combat_ended event, got %v", events)
+	}
+}
+
+func TestApply_Damage_Entity(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Combat = types.CombatState{Active: true, EnemyID: "goblin"}
+	// Initialize enemy stats.
+	Apply(s, defs, []types.Effect{{Type: "start_combat", Params: map[string]any{"enemy": "goblin"}}}, ctx)
+
+	events, _ := Apply(s, defs, []types.Effect{
+		{Type: "damage", Params: map[string]any{"target": "goblin", "amount": 5}},
+	}, ctx)
+
+	hp, ok := state.GetStat(s, defs, "goblin", "hp")
+	if !ok || hp != 7 {
+		t.Errorf("expected hp=7, got %d (ok=%v)", hp, ok)
+	}
+
+	// Should have entity_damaged event (from damage) plus combat_started (from start_combat).
+	found := false
+	for _, e := range events {
+		if e.Type == "entity_damaged" {
+			found = true
+			if e.Data["target"] != "goblin" || e.Data["amount"] != 5 || e.Data["remaining"] != 7 {
+				t.Errorf("unexpected event data: %v", e.Data)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected entity_damaged event")
+	}
+}
+
+func TestApply_Damage_Entity_Death(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Combat = types.CombatState{Active: true, EnemyID: "goblin"}
+	// Set goblin to 3 HP.
+	s.Entities["goblin"] = types.EntityState{Props: map[string]any{"hp": 3, "alive": true}}
+
+	events, _ := Apply(s, defs, []types.Effect{
+		{Type: "damage", Params: map[string]any{"target": "goblin", "amount": 5}},
+	}, ctx)
+
+	hp, _ := state.GetStat(s, defs, "goblin", "hp")
+	if hp != 0 {
+		t.Errorf("expected hp=0, got %d", hp)
+	}
+
+	// alive should be false.
+	alive, _ := state.GetEntityProp(s, defs, "goblin", "alive")
+	if alive != false {
+		t.Errorf("expected alive=false, got %v", alive)
+	}
+
+	// Should have enemy_defeated event.
+	found := false
+	for _, e := range events {
+		if e.Type == "enemy_defeated" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected enemy_defeated event")
+	}
+}
+
+func TestApply_Damage_Player(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	effs := []types.Effect{
+		{Type: "damage", Params: map[string]any{"target": "player", "amount": 7}},
+	}
+
+	events, _ := Apply(s, defs, effs, ctx)
+
+	if s.Player.Stats["hp"] != 13 {
+		t.Errorf("expected hp=13, got %d", s.Player.Stats["hp"])
+	}
+
+	found := false
+	for _, e := range events {
+		if e.Type == "entity_damaged" && e.Data["target"] == "player" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected entity_damaged event for player")
+	}
+}
+
+func TestApply_Damage_Player_Death(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Combat = types.CombatState{Active: true, EnemyID: "goblin"}
+	s.Player.Stats["hp"] = 3
+
+	events, _ := Apply(s, defs, []types.Effect{
+		{Type: "damage", Params: map[string]any{"target": "player", "amount": 10}},
+	}, ctx)
+
+	if s.Player.Stats["hp"] != 0 {
+		t.Errorf("expected hp=0, got %d", s.Player.Stats["hp"])
+	}
+	if !s.Flags["game_over"] {
+		t.Error("expected game_over flag")
+	}
+	if s.Combat.Active {
+		t.Error("expected combat to end on player death")
+	}
+
+	found := false
+	for _, e := range events {
+		if e.Type == "player_defeated" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected player_defeated event")
+	}
+}
+
+func TestApply_Damage_ClampsToZero(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Player.Stats["hp"] = 2
+
+	Apply(s, defs, []types.Effect{
+		{Type: "damage", Params: map[string]any{"target": "player", "amount": 100}},
+	}, ctx)
+
+	if s.Player.Stats["hp"] != 0 {
+		t.Errorf("expected hp clamped to 0, got %d", s.Player.Stats["hp"])
+	}
+}
+
+func TestApply_Heal_Player(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Player.Stats["hp"] = 10
+
+	events, _ := Apply(s, defs, []types.Effect{
+		{Type: "heal", Params: map[string]any{"target": "player", "amount": 5}},
+	}, ctx)
+
+	if s.Player.Stats["hp"] != 15 {
+		t.Errorf("expected hp=15, got %d", s.Player.Stats["hp"])
+	}
+
+	found := false
+	for _, e := range events {
+		if e.Type == "entity_healed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected entity_healed event")
+	}
+}
+
+func TestApply_Heal_ClampsToMax(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Player.Stats["hp"] = 18
+
+	Apply(s, defs, []types.Effect{
+		{Type: "heal", Params: map[string]any{"target": "player", "amount": 10}},
+	}, ctx)
+
+	if s.Player.Stats["hp"] != 20 {
+		t.Errorf("expected hp clamped to max 20, got %d", s.Player.Stats["hp"])
+	}
+}
+
+func TestApply_Heal_Entity(t *testing.T) {
+	s, defs, ctx := combatSetup()
+	s.Entities["goblin"] = types.EntityState{Props: map[string]any{"hp": 5, "max_hp": 12}}
+
+	Apply(s, defs, []types.Effect{
+		{Type: "heal", Params: map[string]any{"target": "goblin", "amount": 4}},
+	}, ctx)
+
+	hp, _ := state.GetStat(s, defs, "goblin", "hp")
+	if hp != 9 {
+		t.Errorf("expected hp=9, got %d", hp)
+	}
+}
+
+func TestApply_SetStat_Player(t *testing.T) {
+	s, defs, ctx := combatSetup()
+
+	Apply(s, defs, []types.Effect{
+		{Type: "set_stat", Params: map[string]any{"target": "player", "stat": "attack", "value": 8}},
+	}, ctx)
+
+	if s.Player.Stats["attack"] != 8 {
+		t.Errorf("expected attack=8, got %d", s.Player.Stats["attack"])
+	}
+}
+
+func TestApply_SetStat_Entity(t *testing.T) {
+	s, defs, ctx := combatSetup()
+
+	Apply(s, defs, []types.Effect{
+		{Type: "set_stat", Params: map[string]any{"target": "goblin", "stat": "defense", "value": 5}},
+	}, ctx)
+
+	v, _ := state.GetStat(s, defs, "goblin", "defense")
+	if v != 5 {
+		t.Errorf("expected defense=5, got %d", v)
+	}
+}
+
 func TestApply_MultipleEffects(t *testing.T) {
 	s, defs, ctx := testSetup()
 	effects := []types.Effect{
