@@ -70,13 +70,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error opening script: %v\n", err)
 			os.Exit(1)
 		}
-		defer f.Close()
 		fmt.Printf("%s v%s by %s\n\n", defs.Game.Title, defs.Game.Version, defs.Game.Author)
 		c := cli.New(eng, defs)
 		c.In = f
 		c.EchoInput = true
 		c.Trace = trace
 		c.Run()
+		f.Close()
 		return
 	}
 
