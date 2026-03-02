@@ -1,0 +1,11 @@
+# Test combat encounter - navigate to goblin and fight
+north
+east
+push wall
+north
+# Now in secret_passage with the goblin — fight!
+attack goblin
+attack goblin
+attack goblin
+attack goblin
+attack goblin

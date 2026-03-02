@@ -1,5 +1,5 @@
 // QuestCore is a deterministic, data-driven game engine for text adventures.
-// Usage: questcore [--version] [--plain] <game_directory>
+// Usage: questcore [--version] [--plain] [--script <file>] [--trace] <game_directory>
 package main
 
 import (
@@ -21,24 +21,36 @@ var (
 
 func main() {
 	plain := false
+	trace := false
 	var gameDir string
+	var scriptFile string
 
-	for _, arg := range os.Args[1:] {
-		switch arg {
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "--version":
 			fmt.Printf("questcore %s (commit %s, built %s)\n", version, commit, date)
 			return
 		case "--plain":
 			plain = true
+		case "--trace":
+			trace = true
+		case "--script":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "--script requires a file path\n")
+				os.Exit(1)
+			}
+			i++
+			scriptFile = args[i]
 		default:
 			if gameDir == "" {
-				gameDir = arg
+				gameDir = args[i]
 			}
 		}
 	}
 
 	if gameDir == "" {
-		fmt.Fprintf(os.Stderr, "Usage: questcore [--version] [--plain] <game_directory>\n")
+		fmt.Fprintf(os.Stderr, "Usage: questcore [--version] [--plain] [--script <file>] [--trace] <game_directory>\n")
 		os.Exit(1)
 	}
 
@@ -51,10 +63,28 @@ func main() {
 
 	eng := engine.New(defs)
 
+	// Script mode: open file, force plain, echo commands.
+	if scriptFile != "" {
+		f, err := os.Open(scriptFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening script: %v\n", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		fmt.Printf("%s v%s by %s\n\n", defs.Game.Title, defs.Game.Version, defs.Game.Author)
+		c := cli.New(eng, defs)
+		c.In = f
+		c.EchoInput = true
+		c.Trace = trace
+		c.Run()
+		return
+	}
+
 	// Use plain CLI if --plain flag or stdout is not a terminal.
 	if plain || !isTerminal() {
 		fmt.Printf("%s v%s by %s\n\n", defs.Game.Title, defs.Game.Version, defs.Game.Author)
 		c := cli.New(eng, defs)
+		c.Trace = trace
 		c.Run()
 		return
 	}
