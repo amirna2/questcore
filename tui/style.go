@@ -39,6 +39,23 @@ var (
 
 	styleTrace = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
+
+	styleCombat = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("208"))
+
+	styleCombatHeader = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("208")).
+				Bold(true)
+
+	styleGameOver = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+
+	styleCombatPrompt = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("208"))
+
+	styleGameOverPrompt = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("196"))
 )
 
 // lineKind identifies the type of an output line for styling.
@@ -52,6 +69,10 @@ const (
 	kindSystem
 	kindError
 	kindTrace
+	kindCombat
+	kindCombatHeader
+	kindGameOver
+	kindPreStyled
 )
 
 // classifyLine determines what kind of output line this is.

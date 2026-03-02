@@ -54,5 +54,6 @@ On("enemy_defeated", {
     conditions = { PropIs("cave_goblin", "alive", false) },
     effects = {
         Say("The goblin crumples to the ground."),
+        SetProp("goblin_blade", "takeable", true),
     }
 })

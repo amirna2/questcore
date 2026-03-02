@@ -303,53 +303,53 @@ Built vertically — each phase ends with something you can run and test.
 ### Phase 1: `feat/combat-basic` — Minimal playable combat (attack + win)
 _Goal: type `attack goblin`, see damage, enemy hits back, kill it. Playable in TUI._
 
-- [ ] 1. Types: add `CombatState`, `BehaviorEntry`, `LootEntry` to `types/types.go`; add `PlayerStats` to `GameDef`; add `Combat` + `RNGPosition` to `State`
-- [ ] 2. RNG: create `engine/rng.go` + `engine/rng_test.go` — Roll, WeightedSelect, Position, RestoreRNG
-- [ ] 3. State helpers: add `InCombat()`, `GetStat()`, `SetStat()` to `engine/state/state.go`; modify `NewState()` to copy PlayerStats; add tests
-- [ ] 4. Add `Actor` to `effects.Context`
-- [ ] 5. Effects: add `start_combat`, `end_combat`, `damage` to `engine/effects/effects.go` + tests
-- [ ] 6. Combat engine: create `engine/combat.go` — `DamageCalc()`, `defaultCombatAttack()` only
-- [ ] 7. Engine: add `RNG` to Engine, modify `Step()` — combat command restriction, default attack fallback, enemy turn (attack-only AI for now)
-- [ ] 8. Loader: add `Enemy` constructor + `StartCombat`/`EndCombat`/`Damage` effect helpers + `compileGame` player_stats + `compileEntity` enemy stats to `loader/`
-- [ ] 9. Validation: add new types to valid maps, basic enemy stat validation
-- [ ] 10. Content: add `player_stats` to Lost Crown `game.lua`, create `enemies.lua` with cave goblin (stats only, no behavior/loot yet), add attack trigger rule
-- [ ] 11. `go test ./...` — all green
-- [ ] 12. **PLAYTEST**: run game, go to goblin room, `attack goblin`, trade hits, win
+- [x] 1. Types: add `CombatState`, `BehaviorEntry`, `LootEntry` to `types/types.go`; add `PlayerStats` to `GameDef`; add `Combat` + `RNGPosition` to `State`
+- [x] 2. RNG: create `engine/rng.go` + `engine/rng_test.go` — Roll, WeightedSelect, Position, RestoreRNG
+- [x] 3. State helpers: add `InCombat()`, `GetStat()`, `SetStat()` to `engine/state/state.go`; modify `NewState()` to copy PlayerStats; add tests
+- [x] 4. Add `Actor` to `effects.Context`
+- [x] 5. Effects: add `start_combat`, `end_combat`, `damage` to `engine/effects/effects.go` + tests
+- [x] 6. Combat engine: create `engine/combat.go` — `DamageCalc()`, `defaultCombatAttack()` only
+- [x] 7. Engine: add `RNG` to Engine, modify `Step()` — combat command restriction, default attack fallback, enemy turn (attack-only AI for now)
+- [x] 8. Loader: add `Enemy` constructor + `StartCombat`/`EndCombat`/`Damage` effect helpers + `compileGame` player_stats + `compileEntity` enemy stats to `loader/`
+- [x] 9. Validation: add new types to valid maps, basic enemy stat validation
+- [x] 10. Content: add `player_stats` to Lost Crown `game.lua`, create `enemies.lua` with cave goblin (stats only, no behavior/loot yet), add attack trigger rule
+- [x] 11. `go test ./...` — all green
+- [x] 12. **PLAYTEST**: run game, go to goblin room, `attack goblin`, trade hits, win
 
 ### Phase 2: `feat/combat-actions` — Defend, flee, player death
 _Goal: full combat action set. Defend reduces damage, flee escapes, dying = game over._
 
-- [ ] 13. Parser: add `defend`/`block`/`guard` and `flee`/`escape` aliases
-- [ ] 14. Effects: add `heal`, `set_stat` effects + tests
-- [ ] 15. Default combat: add `defaultCombatDefend()`, `defaultCombatFlee()` to `engine/combat.go`
-- [ ] 16. Step: add `go` → `flee` rewrite in combat, game over check at top of Step
-- [ ] 17. Conditions: add `in_combat`, `in_combat_with`, `stat_gt`, `stat_lt` to conditions.go + tests
-- [ ] 18. Loader: add condition helpers (`InCombat`, `StatGt`, etc.) + `Heal`/`SetStat` effect helpers
-- [ ] 19. `go test ./...` — all green
-- [ ] 20. **PLAYTEST**: defend (take less damage), flee (escape to previous room), die (see game over)
+- [x] 13. Parser: add `defend`/`block`/`guard` and `flee`/`escape` aliases
+- [x] 14. Effects: add `heal`, `set_stat` effects + tests
+- [x] 15. Default combat: add `defaultCombatDefend()`, `defaultCombatFlee()` to `engine/combat.go`
+- [x] 16. Step: add `go` → `flee` rewrite in combat, game over check at top of Step
+- [x] 17. Conditions: add `in_combat`, `in_combat_with`, `stat_gt`, `stat_lt` to conditions.go + tests
+- [x] 18. Loader: add condition helpers (`InCombat`, `StatGt`, etc.) + `Heal`/`SetStat` effect helpers
+- [x] 19. `go test ./...` — all green
+- [x] 20. **PLAYTEST**: defend (take less damage), flee (escape to previous room), die (see game over)
 
 ### Phase 3: `feat/combat-ai-loot` — Enemy AI + loot drops
 _Goal: enemy uses weighted behavior (attack/defend/flee), drops loot on death._
 
-- [ ] 21. Enemy AI: add `EnemyTurn()` with weighted selection to `engine/combat.go`
-- [ ] 22. Replace attack-only AI in Step with full `EnemyTurn()`
-- [ ] 23. Loot: add `ProcessLoot()` to `engine/combat.go`, wire into enemy death in effects
-- [ ] 24. Loader: compile `behavior` → `[]BehaviorEntry`, compile `loot` → `[]LootEntry` + gold
-- [ ] 25. Validation: behavior weights, actions, loot refs, loot chance range
-- [ ] 26. Content: add behavior + loot to cave goblin, add `goblin_blade` item
-- [ ] 27. `go test ./...` — all green
-- [ ] 28. **PLAYTEST**: goblin defends/flees sometimes, drops blade + gold on death
+- [x] 21. Enemy AI: add `EnemyTurn()` with weighted selection to `engine/combat.go`
+- [x] 22. Replace attack-only AI in Step with full `EnemyTurn()`
+- [x] 23. Loot: add `ProcessLoot()` to `engine/combat.go`, wire into enemy death in effects
+- [x] 24. Loader: compile `behavior` → `[]BehaviorEntry`, compile `loot` → `[]LootEntry` + gold
+- [x] 25. Validation: behavior weights, actions, loot refs, loot chance range
+- [x] 26. Content: add behavior + loot to cave goblin, add `goblin_blade` item
+- [x] 27. `go test ./...` — all green
+- [x] 28. **PLAYTEST**: goblin defends/flees sometimes, drops blade + gold on death
 
 ### Phase 4: `feat/combat-save-tui` — Save/load mid-combat + TUI display
 _Goal: health bars, combat prompt, save mid-fight and resume._
 
-- [ ] 29. Save: add `Combat` + `RNGPosition` to SaveData, update Save/ApplySave + tests
-- [ ] 30. Engine: add `RestoreRNG()`, wire into load path
-- [ ] 31. TUI: create `tui/combat.go` — health bars, game over screen
-- [ ] 32. TUI: modify `tui/tui.go` — inject combat display, combat prompt, game over blocking
-- [ ] 33. TUI: modify `tui/status.go` — show HP; modify `tui/style.go` — combat styles
-- [ ] 34. `go test ./...` — all green
-- [ ] 35. **PLAYTEST**: see health bars, save mid-combat, load and resume, game over screen
+- [x] 29. Save: add `Combat` + `RNGPosition` to SaveData, update Save/ApplySave + tests
+- [x] 30. Engine: add `RestoreRNG()`, wire into load path
+- [x] 31. TUI: create `tui/combat.go` — health bars, game over screen
+- [x] 32. TUI: modify `tui/tui.go` — inject combat display, combat prompt, game over blocking
+- [x] 33. TUI: modify `tui/status.go` — show HP; modify `tui/style.go` — combat styles
+- [x] 34. `go test ./...` — all green
+- [x] 35. **PLAYTEST**: see health bars, save mid-combat, load and resume, game over screen
 
 ### Phase 5: `feat/combat-integration` — Integration tests + polish
 _Goal: comprehensive test coverage, deterministic replay verified._

@@ -39,6 +39,13 @@ func (m Model) renderStatusBar() string {
 	invCount := len(s.Player.Inventory)
 
 	left := fmt.Sprintf(" %s | Exits: %s", roomName, exitStr)
+
+	// Show HP if player has combat stats.
+	if hp, ok := s.Player.Stats["hp"]; ok {
+		if maxHP, ok := s.Player.Stats["max_hp"]; ok {
+			left += fmt.Sprintf(" | HP: %d/%d", hp, maxHP)
+		}
+	}
 	right := fmt.Sprintf("T:%d ", s.TurnCount)
 
 	// Show inventory items if they fit, otherwise just count.

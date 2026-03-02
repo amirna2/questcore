@@ -345,14 +345,24 @@ func (e *Engine) builtinLook() ([]types.Effect, []string) {
 
 func (e *Engine) builtinInventory() ([]types.Effect, []string) {
 	inv := e.State.Player.Inventory
-	if len(inv) == 0 {
+	gold := e.State.Counters["gold"]
+
+	if len(inv) == 0 && gold <= 0 {
 		return nil, []string{"You are carrying nothing."}
 	}
-	var names []string
-	for _, id := range inv {
-		names = append(names, e.entityName(id))
+
+	var lines []string
+	if len(inv) > 0 {
+		var names []string
+		for _, id := range inv {
+			names = append(names, e.entityName(id))
+		}
+		lines = append(lines, "You are carrying: "+strings.Join(names, ", ")+".")
 	}
-	return nil, []string{"You are carrying: " + strings.Join(names, ", ") + "."}
+	if gold > 0 {
+		lines = append(lines, fmt.Sprintf("Gold: %d", gold))
+	}
+	return nil, lines
 }
 
 func (e *Engine) builtinExamine(objectID string) ([]types.Effect, []string) {

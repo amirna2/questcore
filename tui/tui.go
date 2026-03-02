@@ -205,16 +205,52 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
+		m.updatePrompt()
 		return m, nil
+	}
+
+	// Game over input blocking.
+	if state.GetFlag(m.engine.State, "game_over") {
+		m = m.appendOutput(gameOutputMsg{
+			input: input,
+			lines: []string{"Game over. Use /load to restore a save or /quit to exit."},
+		})
+		m.updatePrompt()
+		return m, nil
+	}
+
+	// Snapshot combat state before step (combat may end during step).
+	wasCombat := state.InCombat(m.engine.State)
+	var preCombatEnemyID string
+	if wasCombat {
+		preCombatEnemyID = m.engine.State.Combat.EnemyID
 	}
 
 	// Game command.
 	result := m.engine.Step(input)
 	output := result.Output
+
+	// Combat display injection.
+	if state.InCombat(m.engine.State) {
+		if box := m.renderCombatStatus(); box != "" {
+			output = append(output, box)
+		}
+	} else if wasCombat && !state.GetFlag(m.engine.State, "game_over") {
+		// Combat just ended with victory — show final result.
+		output = append(output, m.renderVictory(preCombatEnemyID))
+	}
+	if state.GetFlag(m.engine.State, "game_over") {
+		if wasCombat {
+			output = append(output, m.renderDefeat(preCombatEnemyID))
+		}
+		output = append(output, m.renderGameOver(preCombatEnemyID))
+	}
+
 	if m.trace {
 		output = append(output, m.formatTrace(result)...)
 	}
 	m = m.appendOutput(gameOutputMsg{input: input, lines: output})
+	m.updatePrompt()
 	return m, nil
 }
 
@@ -226,10 +262,20 @@ func (m Model) appendOutput(msg gameOutputMsg) Model {
 		})
 	}
 
+	inCombat := state.InCombat(m.engine.State) || state.GetFlag(m.engine.State, "game_over")
 	for _, line := range msg.lines {
 		rl := rawLine{text: line, isSystem: msg.isSystem}
 		if !msg.isSystem {
-			rl.kind = classifyLine(line)
+			// Detect pre-styled lines (lipgloss bordered boxes contain ANSI escapes).
+			if strings.Contains(line, "\x1b[") {
+				rl.kind = kindPreStyled
+			} else {
+				rl.kind = classifyLine(line)
+				// In combat/game-over context, color plain narrative lines as combat.
+				if inCombat && rl.kind == kindRoomDesc {
+					rl.kind = kindCombat
+				}
+			}
 		}
 		m.rawLines = append(m.rawLines, rl)
 	}
@@ -258,6 +304,12 @@ func (m *Model) refreshViewport() {
 	for _, rl := range m.rawLines {
 		if rl.text == "" {
 			styled = append(styled, "")
+			continue
+		}
+
+		// Pre-styled lines (lipgloss boxes) skip word-wrap and re-styling.
+		if rl.kind == kindPreStyled {
+			styled = append(styled, rl.text)
 			continue
 		}
 
@@ -292,6 +344,14 @@ func renderLineKind(line string, kind lineKind) string {
 		return styleError.Render(line)
 	case kindTrace:
 		return styleTrace.Render(line)
+	case kindCombat:
+		return styleCombat.Render(line)
+	case kindCombatHeader:
+		return styleCombatHeader.Render(line)
+	case kindGameOver:
+		return styleGameOver.Render(line)
+	case kindPreStyled:
+		return line
 	default:
 		return styleRoomDesc.Render(line)
 	}
@@ -419,6 +479,7 @@ func (m *Model) cmdLoad(name string) []string {
 	}
 
 	save.ApplySave(m.engine.State, sd)
+	m.engine.RestoreRNG(sd.RNGSeed, sd.RNGPosition)
 
 	output := []string{fmt.Sprintf("Game loaded from %s (turn %d).", name, sd.Turn)}
 	result := m.engine.Step("look")
@@ -451,6 +512,11 @@ func (m *Model) cmdHelp() []string {
 		"  wait (z)              — Let time pass",
 		"  again (g)             — Repeat your last command",
 		"",
+		"Combat:",
+		"  attack                — Attack the enemy",
+		"  defend                — Defend (reduces damage taken)",
+		"  flee                  — Attempt to flee combat",
+		"",
 		"Navigation: PgUp/PgDn to scroll, Up/Down for command history",
 	}
 }
@@ -467,6 +533,12 @@ func (m *Model) cmdState() []string {
 	}
 	if len(s.Counters) > 0 {
 		output = append(output, fmt.Sprintf("Counters: %v", s.Counters))
+	}
+	if state.InCombat(s) {
+		enemyHP, _ := state.GetStat(s, m.defs, s.Combat.EnemyID, "hp")
+		enemyMaxHP, _ := state.GetStat(s, m.defs, s.Combat.EnemyID, "max_hp")
+		output = append(output, fmt.Sprintf("Combat: enemy=%s round=%d defending=%v enemy_hp=%d/%d",
+			s.Combat.EnemyID, s.Combat.RoundCount, s.Combat.Defending, enemyHP, enemyMaxHP))
 	}
 	return output
 }
@@ -486,6 +558,21 @@ func (m *Model) formatTrace(result types.Result) []string {
 		}
 	}
 	return lines
+}
+
+// updatePrompt sets the input prompt based on game state.
+func (m *Model) updatePrompt() {
+	switch {
+	case state.GetFlag(m.engine.State, "game_over"):
+		m.input.Prompt = "/load or /quit> "
+		m.input.PromptStyle = styleGameOverPrompt
+	case state.InCombat(m.engine.State):
+		m.input.Prompt = "What do you do? (attack, defend, use <item>, flee) "
+		m.input.PromptStyle = styleCombatPrompt
+	default:
+		m.input.Prompt = "> "
+		m.input.PromptStyle = styleInputPrompt
+	}
 }
 
 // viewportKeyMap returns a viewport keymap with Up/Down disabled
