@@ -12,7 +12,12 @@ COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: build test lint vet fmt-check fmt ci clean
+.DEFAULT_GOAL := help
+.PHONY: help build test lint vet fmt-check fmt ci play clean
+
+## help: Show this help
+help:
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## //' | column -t -s ':'
 
 ## build: Compile the questcore binary with version info
 build:
@@ -45,6 +50,10 @@ fmt:
 
 ## ci: Run the full check pipeline (same as GitHub Actions)
 ci: fmt-check vet lint build test
+
+## play: Build and run the Lost Crown game
+play: build
+	$(BINARY) games/lost_crown/
 
 ## clean: Remove build artifacts
 clean:
