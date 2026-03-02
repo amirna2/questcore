@@ -247,3 +247,46 @@ func TestCLI_Again_NothingToRepeat(t *testing.T) {
 		t.Error("expected 'Nothing to repeat' when no prior command")
 	}
 }
+
+func TestCLI_EchoInput(t *testing.T) {
+	c, out := newTestCLI(t, "look\n/quit\n")
+	c.EchoInput = true
+	c.Run()
+
+	output := out.String()
+	// With EchoInput, the typed command should appear after the prompt.
+	if !strings.Contains(output, "> look\n") {
+		t.Errorf("expected echoed 'look' after prompt, got:\n%s", output)
+	}
+}
+
+func TestCLI_CommentSkipping(t *testing.T) {
+	c, out := newTestCLI(t, "# this is a comment\nlook\n/quit\n")
+	c.EchoInput = true
+	c.Run()
+
+	output := out.String()
+	if strings.Contains(output, "# this is a comment") {
+		t.Error("comment line should not appear in output")
+	}
+	if !strings.Contains(output, "A grand hall.") {
+		t.Error("expected room description from look command after comment")
+	}
+}
+
+func TestCLI_EchoInput_WithNavigation(t *testing.T) {
+	c, out := newTestCLI(t, "# Navigate north\ngo north\n/quit\n")
+	c.EchoInput = true
+	c.Run()
+
+	output := out.String()
+	if strings.Contains(output, "# Navigate") {
+		t.Error("comment should be skipped")
+	}
+	if !strings.Contains(output, "> go north\n") {
+		t.Errorf("expected echoed 'go north' after prompt, got:\n%s", output)
+	}
+	if !strings.Contains(output, "A peaceful garden.") {
+		t.Error("expected garden description after going north")
+	}
+}

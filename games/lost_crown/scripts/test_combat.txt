@@ -1,0 +1,20 @@
+# Test combat encounter - full path to goblin fight
+#
+# 1. Navigate to the library
+north
+east
+# 2. Take and read the old book to learn about the passage
+take book
+read book
+# 3. Talk to Scholar Elara, then ask about the passage
+talk elara
+ask elara about passage
+# 4. Now push the wall to reveal the secret passage
+push wall
+north
+# 5. Now in secret_passage with the goblin — fight!
+attack goblin
+attack goblin
+attack goblin
+attack goblin
+attack goblin

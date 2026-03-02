@@ -21,19 +21,33 @@ import (
 type Engine struct {
 	Defs  *state.Defs
 	State *types.State
+	RNG   *RNG
 }
 
 // New creates a new engine from definitions.
 func New(defs *state.Defs) *Engine {
+	s := state.NewState(defs)
 	return &Engine{
 		Defs:  defs,
-		State: state.NewState(defs),
+		State: s,
+		RNG:   NewRNG(s.RNGSeed),
 	}
+}
+
+// RestoreRNG re-creates the RNG from seed and advances to the saved position.
+func (e *Engine) RestoreRNG(seed int64, position int64) {
+	e.RNG = RestoreRNG(seed, position)
 }
 
 // Step processes one player command and returns the result.
 func (e *Engine) Step(input string) types.Result {
 	var result types.Result
+
+	// 0. Game over — block all gameplay commands.
+	if state.GetFlag(e.State, "game_over") {
+		result.Output = append(result.Output, "Game over. Use /load to restore a save or /quit to exit.")
+		return result
+	}
 
 	// 1. Parse input.
 	intent := parser.Parse(input)
@@ -47,6 +61,18 @@ func (e *Engine) Step(input string) types.Result {
 		return result
 	}
 
+	// 3a. Combat mode: rewrite "go" → "flee" and restrict commands.
+	if state.InCombat(e.State) {
+		if intent.Verb == "go" {
+			intent.Verb = "flee"
+			intent.Object = ""
+		}
+		if !isCombatVerb(intent.Verb) {
+			result.Output = append(result.Output, "You're in the middle of a fight! (attack, defend, use <item>, flee)")
+			return result
+		}
+	}
+
 	// 4. Determine resolution strategy based on verb.
 	var objectID, targetID string
 	var resolveErr error
@@ -57,6 +83,17 @@ func (e *Engine) Step(input string) types.Result {
 		objectID = intent.Object
 
 	case "inventory", "wait":
+		// No resolution needed.
+
+	case "attack":
+		// During combat, target is implicit (the combat enemy).
+		if state.InCombat(e.State) {
+			objectID = e.State.Combat.EnemyID
+		} else if intent.Object != "" {
+			objectID, targetID, resolveErr = e.resolveEntities(intent)
+		}
+
+	case "defend", "flee":
 		// No resolution needed.
 
 	case "talk":
@@ -112,19 +149,26 @@ func (e *Engine) Step(input string) types.Result {
 		return result
 	}
 
-	// 7b. If matched → use rule effects. Otherwise → built-in behavior.
+	// 7b. If matched → use rule effects. Otherwise → built-in or combat behavior.
 	if !matched {
-		builtinEffs, builtinOut := e.builtinBehavior(intent, objectID)
-		if builtinOut != nil || builtinEffs != nil {
-			// Built-in handled this verb. Use its output instead of fallback.
-			effs = builtinEffs
-			result.Output = append(result.Output, builtinOut...)
+		if state.InCombat(e.State) {
+			// Default combat behavior.
+			combatEffs, combatOut := e.defaultCombatBehavior(intent, "player")
+			effs = combatEffs
+			result.Output = append(result.Output, combatOut...)
+		} else {
+			builtinEffs, builtinOut := e.builtinBehavior(intent, objectID)
+			if builtinOut != nil || builtinEffs != nil {
+				// Built-in handled this verb. Use its output instead of fallback.
+				effs = builtinEffs
+				result.Output = append(result.Output, builtinOut...)
+			}
+			// If built-in didn't handle it either, fall through with fallback effs.
 		}
-		// If built-in didn't handle it either, fall through with fallback effs.
 	}
 
 	// 8. Apply effects.
-	ctx := effects.Context{Verb: intent.Verb, ObjectID: objectID, TargetID: targetID}
+	ctx := effects.Context{Verb: intent.Verb, ObjectID: objectID, TargetID: targetID, Actor: "player"}
 	evts, output := effects.Apply(e.State, e.Defs, effs, ctx)
 	result.Effects = append(result.Effects, effs...)
 	result.Events = append(result.Events, evts...)
@@ -141,10 +185,103 @@ func (e *Engine) Step(input string) types.Result {
 		result.Output = append(result.Output, output2...)
 	}
 
-	// 11. Increment turn count.
+	// 10a. Loot processing: if an enemy was defeated, roll for drops.
+	for _, evt := range result.Events {
+		if evt.Type == "enemy_defeated" {
+			if enemyID, ok := evt.Data["enemy"].(string); ok {
+				lootEffs, lootOut := ProcessLoot(e.State, e.Defs, enemyID, e.RNG)
+				if len(lootEffs) > 0 {
+					lootEvts, lootOutput := effects.Apply(e.State, e.Defs, lootEffs, ctx)
+					result.Effects = append(result.Effects, lootEffs...)
+					result.Events = append(result.Events, lootEvts...)
+					result.Output = append(result.Output, lootOutput...)
+				}
+				result.Output = append(result.Output, lootOut...)
+			}
+			break // only one enemy can be defeated per turn
+		}
+	}
+
+	// 11. Enemy turn (if still in combat after player's action).
+	if state.InCombat(e.State) {
+		enemyResult := e.runEnemyTurn()
+		result.Effects = append(result.Effects, enemyResult.Effects...)
+		result.Events = append(result.Events, enemyResult.Events...)
+		result.Output = append(result.Output, enemyResult.Output...)
+	}
+
+	// 12. End-of-round cleanup.
+	if state.InCombat(e.State) {
+		e.State.Combat.RoundCount++
+		e.State.Combat.Defending = false
+		// Clear enemy defending flag.
+		enemyID := e.State.Combat.EnemyID
+		if es, ok := e.State.Entities[enemyID]; ok {
+			if _, hasDefending := es.Props["defending"]; hasDefending {
+				es.Props["defending"] = false
+				e.State.Entities[enemyID] = es
+			}
+		}
+	}
+
+	// 13. Track RNG position for save/load.
+	e.State.RNGPosition = e.RNG.Position()
+
+	// 14. Increment turn count.
 	e.State.TurnCount++
 
 	return result
+}
+
+// runEnemyTurn executes the enemy's turn through the same pipeline.
+func (e *Engine) runEnemyTurn() types.Result {
+	var result types.Result
+	enemyID := e.State.Combat.EnemyID
+
+	// Select enemy action.
+	enemyIntent := EnemyTurn(e.State, e.Defs, e.RNG)
+
+	// Try rules pipeline with enemy as actor.
+	effs, matched := rules.Evaluate(e.State, e.Defs, enemyIntent, "", "")
+
+	if !matched {
+		// Use default combat behavior for enemy.
+		combatEffs, combatOut := e.defaultCombatBehavior(enemyIntent, enemyID)
+		effs = combatEffs
+		result.Output = append(result.Output, combatOut...)
+	}
+
+	// Apply enemy effects.
+	ctx := effects.Context{Verb: enemyIntent.Verb, Actor: enemyID}
+	evts, output := effects.Apply(e.State, e.Defs, effs, ctx)
+	result.Effects = append(result.Effects, effs...)
+	result.Events = append(result.Events, evts...)
+	result.Output = append(result.Output, output...)
+
+	// Dispatch events from enemy turn.
+	eventEffs := events.Dispatch(evts, e.State, e.Defs)
+	if len(eventEffs) > 0 {
+		evts2, output2 := effects.Apply(e.State, e.Defs, eventEffs, ctx)
+		result.Effects = append(result.Effects, eventEffs...)
+		result.Events = append(result.Events, evts2...)
+		result.Output = append(result.Output, output2...)
+	}
+
+	return result
+}
+
+// defaultCombatBehavior routes combat verbs to their default implementations.
+func (e *Engine) defaultCombatBehavior(intent types.Intent, actor string) ([]types.Effect, []string) {
+	switch intent.Verb {
+	case "attack":
+		return e.defaultCombatAttack(actor)
+	case "defend":
+		return e.defaultCombatDefend(actor)
+	case "flee":
+		return e.defaultCombatFlee(actor)
+	default:
+		return nil, nil
+	}
 }
 
 // resolveEntities resolves intent object/target names to entity IDs.

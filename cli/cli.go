@@ -18,13 +18,14 @@ import (
 
 // CLI handles terminal interaction with the player.
 type CLI struct {
-	Engine  *engine.Engine
-	Defs    *state.Defs
-	In      io.Reader
-	Out     io.Writer
-	SaveDir string
-	Trace   bool
-	lastCmd string // for "again"/"g" repeat
+	Engine    *engine.Engine
+	Defs      *state.Defs
+	In        io.Reader
+	Out       io.Writer
+	SaveDir   string
+	Trace     bool
+	EchoInput bool   // echo each input line after the prompt (for script playback)
+	lastCmd   string // for "again"/"g" repeat
 }
 
 // New creates a CLI wired to the given engine.
@@ -62,6 +63,13 @@ func (c *CLI) Run() {
 		input := strings.TrimSpace(scanner.Text())
 		if input == "" {
 			continue
+		}
+		// Skip comment lines (for script files).
+		if strings.HasPrefix(input, "#") {
+			continue
+		}
+		if c.EchoInput {
+			c.printLine(input)
 		}
 
 		// Meta-commands start with '/'.

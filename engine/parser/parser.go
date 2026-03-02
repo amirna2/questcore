@@ -71,6 +71,15 @@ var verbAliases = map[string]string{
 	"destroy": "attack",
 	"break":   "attack",
 
+	// Defend
+	"defend": "defend",
+	"block":  "defend",
+	"guard":  "defend",
+
+	// Flee
+	"flee":   "flee",
+	"escape": "flee",
+
 	// Talk / Dialogue
 	"ask":      "talk",
 	"speak":    "talk",
