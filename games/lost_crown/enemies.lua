@@ -29,7 +29,7 @@ Item "goblin_blade" {
 -- Engaging the goblin: attack command triggers combat.
 Rule("attack_goblin",
     When { verb = "attack", object = "cave_goblin" },
-    { InRoom("secret_passage"), PropIs("cave_goblin", "alive", true) },
+    { InRoom("secret_passage"), PropIs("cave_goblin", "alive", true), Not(InCombat()) },
     Then {
         Say("You engage the Cave Goblin in combat!"),
         StartCombat("cave_goblin"),
