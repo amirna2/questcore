@@ -479,15 +479,30 @@ func TestApply_Damage_Entity_Death(t *testing.T) {
 		t.Errorf("expected alive=false, got %v", alive)
 	}
 
-	// Should have enemy_defeated event.
-	found := false
+	// Combat should be ended.
+	if s.Combat.Active {
+		t.Error("expected combat to end when enemy is defeated")
+	}
+	if s.Combat.EnemyID != "" {
+		t.Errorf("expected empty enemy ID after defeat, got %q", s.Combat.EnemyID)
+	}
+
+	// Should have enemy_defeated and combat_ended events.
+	foundDefeated := false
+	foundEnded := false
 	for _, e := range events {
 		if e.Type == "enemy_defeated" {
-			found = true
+			foundDefeated = true
+		}
+		if e.Type == "combat_ended" {
+			foundEnded = true
 		}
 	}
-	if !found {
+	if !foundDefeated {
 		t.Error("expected enemy_defeated event")
+	}
+	if !foundEnded {
+		t.Error("expected combat_ended event when enemy is defeated")
 	}
 }
 

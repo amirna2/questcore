@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nathoo/questcore/engine/state"
@@ -187,4 +188,166 @@ func TestIsCombatVerb(t *testing.T) {
 			t.Errorf("isCombatVerb(%q) = %v, want %v", tt.verb, got, tt.want)
 		}
 	}
+}
+
+// --- Integration tests: full combat through Step() ---
+
+// combatEngine creates an engine with combat-ready defs and starts combat.
+func combatEngine() *Engine {
+	defs := combatDefs()
+	eng := New(defs)
+	// Start combat with the goblin.
+	eng.State.Combat = types.CombatState{
+		Active:           true,
+		EnemyID:          "goblin",
+		RoundCount:       0,
+		PreviousLocation: "cave",
+	}
+	// Initialize enemy runtime stats.
+	eng.State.Entities["goblin"] = types.EntityState{
+		Props: map[string]any{
+			"hp": 12, "max_hp": 12, "attack": 4, "defense": 1,
+			"alive": true,
+		},
+	}
+	return eng
+}
+
+func TestStep_CombatEndsOnEnemyDefeat(t *testing.T) {
+	eng := combatEngine()
+	// Set goblin HP to 1 so a single attack kills it.
+	es := eng.State.Entities["goblin"]
+	es.Props["hp"] = 1
+	eng.State.Entities["goblin"] = es
+
+	result := eng.Step("attack goblin")
+
+	// Combat should have ended.
+	if state.InCombat(eng.State) {
+		t.Error("expected combat to end after defeating the enemy")
+	}
+
+	// Should have enemy_defeated event.
+	foundDefeated := false
+	foundEnded := false
+	for _, e := range result.Events {
+		if e.Type == "enemy_defeated" {
+			foundDefeated = true
+		}
+		if e.Type == "combat_ended" {
+			foundEnded = true
+		}
+	}
+	if !foundDefeated {
+		t.Error("expected enemy_defeated event")
+	}
+	if !foundEnded {
+		t.Error("expected combat_ended event")
+	}
+
+	// Enemy should be marked dead.
+	alive, _ := state.GetEntityProp(eng.State, eng.Defs, "goblin", "alive")
+	if alive != false {
+		t.Errorf("expected goblin alive=false, got %v", alive)
+	}
+}
+
+func TestStep_NoEnemyTurnAfterDefeat(t *testing.T) {
+	eng := combatEngine()
+	// Set goblin HP to 1 so the player's attack kills it.
+	es := eng.State.Entities["goblin"]
+	es.Props["hp"] = 1
+	eng.State.Entities["goblin"] = es
+
+	result := eng.Step("attack goblin")
+
+	// The enemy should NOT get a turn after being killed.
+	// Check that no enemy attack output appears.
+	for _, line := range result.Output {
+		if contains(line, "attacks you") {
+			t.Errorf("dead enemy should not attack, but got: %q", line)
+		}
+	}
+}
+
+func TestStep_EnemyGetsNormalTurnWhileAlive(t *testing.T) {
+	eng := combatEngine()
+	// Goblin has full HP — should survive the player's attack and get a turn.
+
+	result := eng.Step("attack goblin")
+
+	// Goblin should still be alive (12 HP, max single hit is 1d6+5=11).
+	if !state.InCombat(eng.State) {
+		// It's possible the goblin died in one hit with a max roll,
+		// but with 12 HP and max damage 11, it shouldn't happen.
+		t.Error("expected combat to still be active after one attack vs 12 HP enemy")
+	}
+
+	// The result should contain both player attack and enemy action output.
+	if len(result.Output) < 2 {
+		t.Errorf("expected at least 2 lines of output (player + enemy), got %d", len(result.Output))
+	}
+}
+
+func TestStep_CombatBlocksNonCombatVerbs(t *testing.T) {
+	eng := combatEngine()
+
+	result := eng.Step("take sword")
+
+	found := false
+	for _, line := range result.Output {
+		if contains(line, "middle of a fight") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected combat restriction message, got: %v", result.Output)
+	}
+}
+
+func TestStep_AttackAfterCombatEnds(t *testing.T) {
+	eng := combatEngine()
+	// Kill the goblin.
+	es := eng.State.Entities["goblin"]
+	es.Props["hp"] = 1
+	eng.State.Entities["goblin"] = es
+
+	eng.Step("attack goblin")
+
+	// Now try attacking again — should not be in combat.
+	result := eng.Step("attack goblin")
+
+	// Should not re-enter combat or deal damage.
+	if state.InCombat(eng.State) {
+		t.Error("should not be in combat after enemy is already dead")
+	}
+
+	// Should not contain attack output.
+	for _, line := range result.Output {
+		if contains(line, "You strike") {
+			t.Errorf("should not be able to attack dead enemy, got: %q", line)
+		}
+	}
+}
+
+func TestStep_GoRewrittenToFleeDuringCombat(t *testing.T) {
+	eng := combatEngine()
+
+	result := eng.Step("go south")
+
+	// "go" should be rewritten to "flee" during combat.
+	foundFlee := false
+	for _, line := range result.Output {
+		if contains(line, "run") || contains(line, "escape") || contains(line, "flee") {
+			foundFlee = true
+		}
+	}
+	if !foundFlee {
+		t.Errorf("expected flee output when using 'go' during combat, got: %v", result.Output)
+	}
+}
+
+// contains checks if s contains substr (case-insensitive).
+func contains(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }

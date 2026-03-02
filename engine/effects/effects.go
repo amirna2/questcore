@@ -193,9 +193,15 @@ func Apply(s *types.State, defs *state.Defs, effects []types.Effect, ctx Context
 					}
 					es.Props["alive"] = false
 					s.Entities[target] = es
+					// End combat when enemy is defeated.
+					s.Combat = types.CombatState{}
 					events = append(events, types.Event{
 						Type: "enemy_defeated",
 						Data: map[string]any{"enemy": target},
+					})
+					events = append(events, types.Event{
+						Type: "combat_ended",
+						Data: map[string]any{},
 					})
 				}
 			}
