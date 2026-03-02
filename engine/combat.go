@@ -177,6 +177,51 @@ func (e *Engine) defaultCombatFlee(actor string) ([]types.Effect, []string) {
 	return nil, []string{fmt.Sprintf("The %s tries to flee but fails! Roll: 1d6 → [%d]", enemyName, roll)}
 }
 
+// ProcessLoot rolls for each item in the enemy's loot table and produces
+// effects for successful drops (give_item) and gold (inc_counter).
+func ProcessLoot(s *types.State, defs *state.Defs, enemyID string, rng *RNG) ([]types.Effect, []string) {
+	def, ok := defs.Entities[enemyID]
+	if !ok {
+		return nil, nil
+	}
+
+	var effs []types.Effect
+	var output []string
+
+	// Roll for each loot item.
+	if lootItems, ok := def.Props["loot_items"].([]types.LootEntry); ok {
+		for _, item := range lootItems {
+			roll := rng.Roll(100)
+			if roll <= item.Chance {
+				name := item.ItemID
+				if ent, ok := defs.Entities[item.ItemID]; ok {
+					if n, ok := ent.Props["name"].(string); ok {
+						name = n
+					}
+				}
+				effs = append(effs, types.Effect{
+					Type:   "give_item",
+					Params: map[string]any{"item": item.ItemID},
+				})
+				output = append(output, fmt.Sprintf("You found: %s!", name))
+			}
+		}
+	}
+
+	// Gold drop.
+	if gold, ok := def.Props["loot_gold"]; ok {
+		if g, ok := gold.(int); ok && g > 0 {
+			effs = append(effs, types.Effect{
+				Type:   "inc_counter",
+				Params: map[string]any{"counter": "gold", "amount": g},
+			})
+			output = append(output, fmt.Sprintf("You found %d gold.", g))
+		}
+	}
+
+	return effs, output
+}
+
 // combatantName returns the display name for a combatant.
 func (e *Engine) combatantName(id string) string {
 	if id == "player" {

@@ -94,6 +94,18 @@ func combatDefs() *state.Defs {
 						{Action: "defend", Weight: 20},
 						{Action: "flee", Weight: 10},
 					},
+					"loot_items": []types.LootEntry{
+						{ItemID: "goblin_blade", Chance: 50},
+					},
+					"loot_gold": 5,
+				},
+			},
+			"goblin_blade": {
+				ID:   "goblin_blade",
+				Kind: "item",
+				Props: map[string]any{
+					"name": "Rusty Goblin Blade", "location": "cave",
+					"takeable": true,
 				},
 			},
 			"skeleton": {
@@ -344,6 +356,154 @@ func TestStep_GoRewrittenToFleeDuringCombat(t *testing.T) {
 	}
 	if !foundFlee {
 		t.Errorf("expected flee output when using 'go' during combat, got: %v", result.Output)
+	}
+}
+
+// --- ProcessLoot unit tests ---
+
+func TestProcessLoot_Deterministic(t *testing.T) {
+	defs := combatDefs()
+	s := state.NewState(defs)
+
+	// Run with two identical RNGs — should produce identical results.
+	rng1 := NewRNG(42)
+	rng2 := NewRNG(42)
+
+	effs1, out1 := ProcessLoot(s, defs, "goblin", rng1)
+	effs2, out2 := ProcessLoot(s, defs, "goblin", rng2)
+
+	if len(effs1) != len(effs2) {
+		t.Fatalf("effect counts differ: %d vs %d", len(effs1), len(effs2))
+	}
+	if len(out1) != len(out2) {
+		t.Fatalf("output counts differ: %d vs %d", len(out1), len(out2))
+	}
+	for i := range out1 {
+		if out1[i] != out2[i] {
+			t.Errorf("output[%d] differs: %q vs %q", i, out1[i], out2[i])
+		}
+	}
+}
+
+func TestProcessLoot_GoldAlwaysDrops(t *testing.T) {
+	defs := combatDefs()
+	s := state.NewState(defs)
+	rng := NewRNG(1)
+
+	effs, output := ProcessLoot(s, defs, "goblin", rng)
+
+	// Gold (5) should always drop regardless of roll.
+	foundGold := false
+	for _, eff := range effs {
+		if eff.Type == "inc_counter" {
+			if eff.Params["counter"] == "gold" && eff.Params["amount"] == 5 {
+				foundGold = true
+			}
+		}
+	}
+	if !foundGold {
+		t.Errorf("expected gold drop effect, got effects: %v", effs)
+	}
+
+	foundGoldMsg := false
+	for _, line := range output {
+		if contains(line, "5 gold") {
+			foundGoldMsg = true
+		}
+	}
+	if !foundGoldMsg {
+		t.Errorf("expected gold message in output, got: %v", output)
+	}
+}
+
+func TestProcessLoot_ItemDropRolled(t *testing.T) {
+	defs := combatDefs()
+	s := state.NewState(defs)
+
+	// Run many trials — with 50% chance, we should see some drops and some misses.
+	drops := 0
+	trials := 100
+	for i := 0; i < trials; i++ {
+		rng := NewRNG(int64(i))
+		effs, _ := ProcessLoot(s, defs, "goblin", rng)
+		for _, eff := range effs {
+			if eff.Type == "give_item" && eff.Params["item"] == "goblin_blade" {
+				drops++
+			}
+		}
+	}
+
+	// With 50% chance over 100 trials, expect roughly 30-70 drops.
+	if drops < 20 || drops > 80 {
+		t.Errorf("expected ~50%% item drop rate, got %d/%d", drops, trials)
+	}
+}
+
+func TestProcessLoot_NoLootTable(t *testing.T) {
+	defs := combatDefs()
+	s := state.NewState(defs)
+	rng := NewRNG(42)
+
+	// Skeleton has no loot.
+	effs, output := ProcessLoot(s, defs, "skeleton", rng)
+
+	if len(effs) != 0 {
+		t.Errorf("expected no effects for enemy with no loot, got %v", effs)
+	}
+	if len(output) != 0 {
+		t.Errorf("expected no output for enemy with no loot, got %v", output)
+	}
+}
+
+func TestProcessLoot_UnknownEnemy(t *testing.T) {
+	defs := combatDefs()
+	s := state.NewState(defs)
+	rng := NewRNG(42)
+
+	effs, output := ProcessLoot(s, defs, "nonexistent", rng)
+
+	if len(effs) != 0 || len(output) != 0 {
+		t.Errorf("expected nil for unknown enemy, got effs=%v, output=%v", effs, output)
+	}
+}
+
+// --- Loot integration test through Step() ---
+
+func TestStep_LootDropsOnEnemyDefeat(t *testing.T) {
+	eng := combatEngine()
+	// Set goblin HP to 1 so one attack kills it.
+	es := eng.State.Entities["goblin"]
+	es.Props["hp"] = 1
+	eng.State.Entities["goblin"] = es
+
+	result := eng.Step("attack goblin")
+
+	// Gold should always drop.
+	if eng.State.Counters["gold"] != 5 {
+		t.Errorf("expected 5 gold after defeating goblin, got %d", eng.State.Counters["gold"])
+	}
+
+	// Should see gold message in output.
+	foundGoldMsg := false
+	for _, line := range result.Output {
+		if contains(line, "5 gold") {
+			foundGoldMsg = true
+		}
+	}
+	if !foundGoldMsg {
+		t.Errorf("expected gold drop message in output, got: %v", result.Output)
+	}
+}
+
+func TestStep_NoLootWhileEnemyAlive(t *testing.T) {
+	eng := combatEngine()
+	// Goblin at full HP — won't die this turn.
+
+	eng.Step("attack goblin")
+
+	// No gold should be awarded.
+	if eng.State.Counters["gold"] != 0 {
+		t.Errorf("expected 0 gold while enemy alive, got %d", eng.State.Counters["gold"])
 	}
 }
 

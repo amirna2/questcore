@@ -185,6 +185,23 @@ func (e *Engine) Step(input string) types.Result {
 		result.Output = append(result.Output, output2...)
 	}
 
+	// 10a. Loot processing: if an enemy was defeated, roll for drops.
+	for _, evt := range result.Events {
+		if evt.Type == "enemy_defeated" {
+			if enemyID, ok := evt.Data["enemy"].(string); ok {
+				lootEffs, lootOut := ProcessLoot(e.State, e.Defs, enemyID, e.RNG)
+				if len(lootEffs) > 0 {
+					lootEvts, lootOutput := effects.Apply(e.State, e.Defs, lootEffs, ctx)
+					result.Effects = append(result.Effects, lootEffs...)
+					result.Events = append(result.Events, lootEvts...)
+					result.Output = append(result.Output, lootOutput...)
+				}
+				result.Output = append(result.Output, lootOut...)
+			}
+			break // only one enemy can be defeated per turn
+		}
+	}
+
 	// 11. Enemy turn (if still in combat after player's action).
 	if state.InCombat(e.State) {
 		enemyResult := e.runEnemyTurn()
