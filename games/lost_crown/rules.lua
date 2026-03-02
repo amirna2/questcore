@@ -94,6 +94,33 @@ Rule("unlock_case",
     }
 )
 
+-- "use key on case" — the natural phrasing most players try.
+Rule("use_key_on_case",
+    When { verb = "use", object = "rusty_key", target = "case" },
+    { HasItem("rusty_key"), InRoom("armory") },
+    Then {
+        Say("You insert the rusty key into the display case lock. It turns with a click! You carefully lift the silver dagger from its velvet rest."),
+        RemoveItem("rusty_key"),
+        SetProp("silver_dagger", "takeable", true),
+        GiveItem("silver_dagger"),
+        SetFlag("case_unlocked", true)
+    }
+)
+
+-- "open case" with key in hand — unlock it.
+Rule("open_case_with_key",
+    When { verb = "open", object = "case" },
+    { HasItem("rusty_key"), InRoom("armory") },
+    Then {
+        Say("You insert the rusty key into the display case lock. It turns with a click! You carefully lift the silver dagger from its velvet rest."),
+        RemoveItem("rusty_key"),
+        SetProp("silver_dagger", "takeable", true),
+        GiveItem("silver_dagger"),
+        SetFlag("case_unlocked", true)
+    }
+)
+
+-- "open case" without key — hint.
 Rule("open_case_locked",
     When { verb = "open", object = "case" },
     { InRoom("armory") },

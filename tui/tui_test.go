@@ -237,6 +237,49 @@ func testDefs() *state.Defs {
 	}
 }
 
+func TestHealthBar(t *testing.T) {
+	tests := []struct {
+		current int
+		max     int
+		width   int
+		want    string
+	}{
+		{10, 10, 10, "██████████"},
+		{5, 10, 10, "█████░░░░░"},
+		{1, 10, 10, "█░░░░░░░░░"},
+		{0, 10, 10, "░░░░░░░░░░"},
+		{12, 12, 12, "████████████"},
+		{8, 12, 12, "████████░░░░"},
+		{1, 100, 10, "█░░░░░░░░░"},
+		{0, 0, 10, "░░░░░░░░░░"},
+		{-5, 10, 10, "░░░░░░░░░░"},
+		{15, 10, 10, "██████████"},
+	}
+	for _, tt := range tests {
+		got := healthBar(tt.current, tt.max, tt.width)
+		if got != tt.want {
+			t.Errorf("healthBar(%d, %d, %d) = %q, want %q", tt.current, tt.max, tt.width, got, tt.want)
+		}
+	}
+}
+
+func TestInjectBorderTitle(t *testing.T) {
+	// Simulate a rounded border top line.
+	top := "╭──────────────────╮"
+	body := "│  content         │\n╰──────────────────╯"
+	rendered := top + "\n" + body
+
+	got := injectBorderTitle(rendered, " COMBAT ")
+	lines := strings.SplitN(got, "\n", 2)
+
+	if !strings.HasPrefix(lines[0], "╭─ COMBAT ─") {
+		t.Errorf("expected top line to start with '╭─ COMBAT ─', got %q", lines[0])
+	}
+	if !strings.HasSuffix(lines[0], "╮") {
+		t.Errorf("expected top line to end with '╮', got %q", lines[0])
+	}
+}
+
 func TestHandleMeta_Quit(t *testing.T) {
 	defs := testDefs()
 	eng := engine.New(defs)

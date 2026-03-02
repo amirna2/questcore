@@ -186,6 +186,7 @@ func (c *CLI) cmdLoad(name string) {
 	}
 
 	save.ApplySave(c.Engine.State, sd)
+	c.Engine.RestoreRNG(sd.RNGSeed, sd.RNGPosition)
 	c.printSystem(fmt.Sprintf("Game loaded from %s (turn %d).", name, sd.Turn))
 
 	// Show current room after loading.
@@ -217,6 +218,11 @@ func (c *CLI) cmdHelp() {
 		"  inventory (i)         — Check what you're carrying",
 		"  wait (z)              — Let time pass",
 		"  again (g)             — Repeat your last command",
+		"",
+		"Combat:",
+		"  attack                — Attack the enemy",
+		"  defend                — Defend (reduces damage taken)",
+		"  flee                  — Attempt to flee combat",
 	}
 	for _, line := range help {
 		c.printLine(line)
@@ -233,6 +239,12 @@ func (c *CLI) cmdState() {
 	}
 	if len(s.Counters) > 0 {
 		c.printSystem(fmt.Sprintf("Counters: %v", s.Counters))
+	}
+	if state.InCombat(s) {
+		enemyHP, _ := state.GetStat(s, c.Defs, s.Combat.EnemyID, "hp")
+		enemyMaxHP, _ := state.GetStat(s, c.Defs, s.Combat.EnemyID, "max_hp")
+		c.printSystem(fmt.Sprintf("Combat: enemy=%s round=%d defending=%v enemy_hp=%d/%d",
+			s.Combat.EnemyID, s.Combat.RoundCount, s.Combat.Defending, enemyHP, enemyMaxHP))
 	}
 }
 

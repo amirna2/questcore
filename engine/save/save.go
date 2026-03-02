@@ -18,6 +18,8 @@ type SaveData struct {
 	Counters    map[string]int               `json:"counters"`
 	EntityState map[string]types.EntityState `json:"entity_state"`
 	RNGSeed     int64                        `json:"rng_seed"`
+	RNGPosition int64                        `json:"rng_position"`
+	Combat      types.CombatState            `json:"combat"`
 	CommandLog  []string                     `json:"command_log"`
 }
 
@@ -32,6 +34,8 @@ func Save(s *types.State, defs *state.Defs) ([]byte, error) {
 		Counters:    s.Counters,
 		EntityState: s.Entities,
 		RNGSeed:     s.RNGSeed,
+		RNGPosition: s.RNGPosition,
+		Combat:      s.Combat,
 		CommandLog:  s.CommandLog,
 	}
 	return json.MarshalIndent(data, "", "  ")
@@ -73,5 +77,7 @@ func ApplySave(s *types.State, sd *SaveData) {
 	s.Entities = sd.EntityState
 	s.TurnCount = sd.Turn
 	s.RNGSeed = sd.RNGSeed
+	s.RNGPosition = sd.RNGPosition
+	s.Combat = sd.Combat
 	s.CommandLog = sd.CommandLog
 }

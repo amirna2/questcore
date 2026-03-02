@@ -148,6 +148,96 @@ func TestLoad_MissingOptionalFields(t *testing.T) {
 	}
 }
 
+func TestRoundTrip_WithCombatState(t *testing.T) {
+	defs := testDefs()
+	s := state.NewState(defs)
+
+	s.Combat = types.CombatState{
+		Active:           true,
+		EnemyID:          "goblin",
+		RoundCount:       3,
+		Defending:        true,
+		PreviousLocation: "hall",
+	}
+
+	data, err := Save(s, defs)
+	if err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	sd, err := Load(data)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	s2 := state.NewState(defs)
+	ApplySave(s2, sd)
+
+	if !s2.Combat.Active {
+		t.Error("expected combat active")
+	}
+	if s2.Combat.EnemyID != "goblin" {
+		t.Errorf("expected enemy 'goblin', got %q", s2.Combat.EnemyID)
+	}
+	if s2.Combat.RoundCount != 3 {
+		t.Errorf("expected round 3, got %d", s2.Combat.RoundCount)
+	}
+	if !s2.Combat.Defending {
+		t.Error("expected defending true")
+	}
+	if s2.Combat.PreviousLocation != "hall" {
+		t.Errorf("expected previous location 'hall', got %q", s2.Combat.PreviousLocation)
+	}
+}
+
+func TestRoundTrip_WithRNGPosition(t *testing.T) {
+	defs := testDefs()
+	s := state.NewState(defs)
+	s.RNGSeed = 42
+	s.RNGPosition = 17
+
+	data, err := Save(s, defs)
+	if err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	sd, err := Load(data)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if sd.RNGPosition != 17 {
+		t.Errorf("expected RNGPosition 17, got %d", sd.RNGPosition)
+	}
+
+	s2 := state.NewState(defs)
+	ApplySave(s2, sd)
+
+	if s2.RNGPosition != 17 {
+		t.Errorf("expected RNGPosition 17 after apply, got %d", s2.RNGPosition)
+	}
+}
+
+func TestLoad_MissingCombat_DefaultsToInactive(t *testing.T) {
+	// JSON without combat or rng_position fields (old save format).
+	data := []byte(`{"version":"1.0","game":"Test","turn":5,"player":{"Location":"hall"},"rng_seed":42}`)
+
+	sd, err := Load(data)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if sd.Combat.Active {
+		t.Error("expected combat inactive for old save")
+	}
+	if sd.Combat.EnemyID != "" {
+		t.Errorf("expected empty enemy ID, got %q", sd.Combat.EnemyID)
+	}
+	if sd.RNGPosition != 0 {
+		t.Errorf("expected RNGPosition 0, got %d", sd.RNGPosition)
+	}
+}
+
 func TestEntityState_PreservedThroughRoundTrip(t *testing.T) {
 	defs := testDefs()
 	s := state.NewState(defs)
