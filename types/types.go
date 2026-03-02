@@ -84,11 +84,12 @@ type RoomDef struct {
 
 // GameDef holds game metadata from Lua.
 type GameDef struct {
-	Title   string
-	Author  string
-	Version string
-	Start   string // starting room ID
-	Intro   string
+	Title       string
+	Author      string
+	Version     string
+	Start       string // starting room ID
+	Intro       string
+	PlayerStats map[string]int // combat stats: hp, max_hp, attack, defense
 }
 
 // Player holds the player's runtime state.
@@ -104,15 +105,38 @@ type EntityState struct {
 	Props    map[string]any // overrides base props
 }
 
+// CombatState tracks the current combat encounter.
+type CombatState struct {
+	Active           bool
+	EnemyID          string
+	RoundCount       int
+	Defending        bool   // true if player chose defend this round
+	PreviousLocation string // room before combat started (for flee)
+}
+
+// BehaviorEntry defines a weighted action for enemy AI.
+type BehaviorEntry struct {
+	Action string
+	Weight int
+}
+
+// LootEntry defines a possible item drop from an enemy.
+type LootEntry struct {
+	ItemID string
+	Chance int // 1-100
+}
+
 // State is the complete mutable game state.
 type State struct {
-	Player     Player
-	Entities   map[string]EntityState // runtime property overrides
-	Flags      map[string]bool
-	Counters   map[string]int
-	TurnCount  int
-	RNGSeed    int64
-	CommandLog []string
+	Player      Player
+	Entities    map[string]EntityState // runtime property overrides
+	Flags       map[string]bool
+	Counters    map[string]int
+	TurnCount   int
+	RNGSeed     int64
+	RNGPosition int64 // number of RNG calls for save/restore
+	CommandLog  []string
+	Combat      CombatState
 }
 
 // EventHandler is a rule triggered by an event rather than a player command.

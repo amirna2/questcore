@@ -56,6 +56,27 @@ func EvalCondition(c types.Condition, s *types.State, defs *state.Defs) bool {
 		}
 		return !EvalCondition(*c.Inner, s, defs)
 
+	case "in_combat":
+		return state.InCombat(s)
+
+	case "in_combat_with":
+		entity, _ := c.Params["entity"].(string)
+		return state.InCombat(s) && s.Combat.EnemyID == entity
+
+	case "stat_gt":
+		entity, _ := c.Params["entity"].(string)
+		stat, _ := c.Params["stat"].(string)
+		value := toInt(c.Params["value"])
+		actual, ok := state.GetStat(s, defs, entity, stat)
+		return ok && actual > value
+
+	case "stat_lt":
+		entity, _ := c.Params["entity"].(string)
+		stat, _ := c.Params["stat"].(string)
+		value := toInt(c.Params["value"])
+		actual, ok := state.GetStat(s, defs, entity, stat)
+		return ok && actual < value
+
 	default:
 		return false
 	}

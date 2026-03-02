@@ -337,3 +337,209 @@ func TestRoomExits_UnknownRoom(t *testing.T) {
 		t.Errorf("expected nil, got %v", exits)
 	}
 }
+
+// --- Combat state helpers ---
+
+func TestInCombat_Active(t *testing.T) {
+	s := &types.State{}
+	s.Combat.Active = true
+	if !InCombat(s) {
+		t.Error("expected InCombat to return true")
+	}
+}
+
+func TestInCombat_Inactive(t *testing.T) {
+	s := &types.State{}
+	if InCombat(s) {
+		t.Error("expected InCombat to return false")
+	}
+}
+
+func TestGetStat_Player(t *testing.T) {
+	s := &types.State{
+		Player: types.Player{Stats: map[string]int{"hp": 15, "attack": 5}},
+	}
+	defs := testDefs()
+
+	v, ok := GetStat(s, defs, "player", "hp")
+	if !ok || v != 15 {
+		t.Errorf("expected hp=15, got %d (ok=%v)", v, ok)
+	}
+
+	v, ok = GetStat(s, defs, "player", "attack")
+	if !ok || v != 5 {
+		t.Errorf("expected attack=5, got %d (ok=%v)", v, ok)
+	}
+}
+
+func TestGetStat_Player_Missing(t *testing.T) {
+	s := &types.State{
+		Player: types.Player{Stats: map[string]int{}},
+	}
+	defs := testDefs()
+
+	_, ok := GetStat(s, defs, "player", "nonexistent")
+	if ok {
+		t.Error("expected missing stat to return false")
+	}
+}
+
+func TestGetStat_Entity_FromDef(t *testing.T) {
+	defs := &Defs{
+		Entities: map[string]types.EntityDef{
+			"goblin": {
+				ID:   "goblin",
+				Kind: "enemy",
+				Props: map[string]any{
+					"hp": 12, "attack": 4,
+				},
+			},
+		},
+	}
+	s := &types.State{Entities: map[string]types.EntityState{}}
+
+	v, ok := GetStat(s, defs, "goblin", "hp")
+	if !ok || v != 12 {
+		t.Errorf("expected hp=12, got %d (ok=%v)", v, ok)
+	}
+}
+
+func TestGetStat_Entity_RuntimeOverride(t *testing.T) {
+	defs := &Defs{
+		Entities: map[string]types.EntityDef{
+			"goblin": {
+				ID:    "goblin",
+				Kind:  "enemy",
+				Props: map[string]any{"hp": 12},
+			},
+		},
+	}
+	s := &types.State{
+		Entities: map[string]types.EntityState{
+			"goblin": {Props: map[string]any{"hp": 5}},
+		},
+	}
+
+	v, ok := GetStat(s, defs, "goblin", "hp")
+	if !ok || v != 5 {
+		t.Errorf("expected hp=5 (override), got %d (ok=%v)", v, ok)
+	}
+}
+
+func TestGetStat_Entity_Missing(t *testing.T) {
+	defs := testDefs()
+	s := NewState(defs)
+
+	_, ok := GetStat(s, defs, "rusty_key", "hp")
+	if ok {
+		t.Error("expected missing stat to return false")
+	}
+}
+
+func TestGetStat_Entity_Float64Coercion(t *testing.T) {
+	defs := &Defs{
+		Entities: map[string]types.EntityDef{
+			"goblin": {
+				ID:    "goblin",
+				Kind:  "enemy",
+				Props: map[string]any{"hp": float64(8)},
+			},
+		},
+	}
+	s := &types.State{Entities: map[string]types.EntityState{}}
+
+	v, ok := GetStat(s, defs, "goblin", "hp")
+	if !ok || v != 8 {
+		t.Errorf("expected hp=8, got %d (ok=%v)", v, ok)
+	}
+}
+
+func TestSetStat_Player(t *testing.T) {
+	s := &types.State{
+		Player:   types.Player{Stats: map[string]int{"hp": 20}},
+		Entities: map[string]types.EntityState{},
+	}
+
+	SetStat(s, "player", "hp", 15)
+	if s.Player.Stats["hp"] != 15 {
+		t.Errorf("expected hp=15, got %d", s.Player.Stats["hp"])
+	}
+}
+
+func TestSetStat_Player_NilStats(t *testing.T) {
+	s := &types.State{
+		Player:   types.Player{},
+		Entities: map[string]types.EntityState{},
+	}
+
+	SetStat(s, "player", "hp", 10)
+	if s.Player.Stats["hp"] != 10 {
+		t.Errorf("expected hp=10, got %d", s.Player.Stats["hp"])
+	}
+}
+
+func TestSetStat_Entity(t *testing.T) {
+	s := &types.State{
+		Entities: map[string]types.EntityState{},
+	}
+
+	SetStat(s, "goblin", "hp", 5)
+	es := s.Entities["goblin"]
+	if es.Props["hp"] != 5 {
+		t.Errorf("expected hp=5, got %v", es.Props["hp"])
+	}
+}
+
+func TestSetStat_Entity_ExistingProps(t *testing.T) {
+	s := &types.State{
+		Entities: map[string]types.EntityState{
+			"goblin": {Props: map[string]any{"alive": true}},
+		},
+	}
+
+	SetStat(s, "goblin", "hp", 3)
+	es := s.Entities["goblin"]
+	if es.Props["hp"] != 3 {
+		t.Errorf("expected hp=3, got %v", es.Props["hp"])
+	}
+	if es.Props["alive"] != true {
+		t.Error("expected alive to still be true")
+	}
+}
+
+func TestNewState_CopiesPlayerStats(t *testing.T) {
+	defs := &Defs{
+		Game: types.GameDef{
+			Start:       "room1",
+			PlayerStats: map[string]int{"hp": 20, "max_hp": 20, "attack": 5, "defense": 2},
+		},
+		Rooms:    map[string]types.RoomDef{"room1": {ID: "room1"}},
+		Entities: map[string]types.EntityDef{},
+	}
+
+	s := NewState(defs)
+	if s.Player.Stats["hp"] != 20 {
+		t.Errorf("expected hp=20, got %d", s.Player.Stats["hp"])
+	}
+	if s.Player.Stats["attack"] != 5 {
+		t.Errorf("expected attack=5, got %d", s.Player.Stats["attack"])
+	}
+
+	// Mutating state should not affect defs.
+	s.Player.Stats["hp"] = 10
+	if defs.Game.PlayerStats["hp"] != 20 {
+		t.Error("mutating state should not affect defs")
+	}
+}
+
+func TestNewState_NoPlayerStats(t *testing.T) {
+	defs := testDefs() // no PlayerStats defined
+
+	s := NewState(defs)
+	if s.Player.Stats == nil {
+		t.Fatal("expected Stats map to be initialized (not nil)")
+	}
+	if len(s.Player.Stats) != 0 {
+		t.Errorf("expected empty Stats, got %v", s.Player.Stats)
+	}
+}

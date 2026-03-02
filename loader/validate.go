@@ -36,19 +36,28 @@ var validEffectTypes = map[string]bool{
 	"emit_event":     true,
 	"start_dialogue": true,
 	"stop":           true,
+	"start_combat":   true,
+	"end_combat":     true,
+	"damage":         true,
+	"heal":           true,
+	"set_stat":       true,
 }
 
 // Known condition types.
 var validConditionTypes = map[string]bool{
-	"has_item":   true,
-	"flag_set":   true,
-	"flag_not":   true,
-	"flag_is":    true,
-	"in_room":    true,
-	"prop_is":    true,
-	"counter_gt": true,
-	"counter_lt": true,
-	"not":        true,
+	"has_item":       true,
+	"flag_set":       true,
+	"flag_not":       true,
+	"flag_is":        true,
+	"in_room":        true,
+	"prop_is":        true,
+	"counter_gt":     true,
+	"counter_lt":     true,
+	"not":            true,
+	"in_combat":      true,
+	"in_combat_with": true,
+	"stat_gt":        true,
+	"stat_lt":        true,
 }
 
 // validate checks the compiled defs for referential integrity and consistency.
@@ -109,6 +118,20 @@ func validate(defs *state.Defs) error {
 	for _, handler := range defs.Handlers {
 		validateConditions(handler.Conditions, defs, ve)
 		validateEffects(handler.Effects, defs, ve)
+	}
+
+	// Validate enemies.
+	hasEnemies := false
+	for entityID, entity := range defs.Entities {
+		if entity.Kind == "enemy" {
+			hasEnemies = true
+			validateEnemy(entityID, entity, defs, ve)
+		}
+	}
+
+	// Warn if enemies exist but no player_stats defined.
+	if hasEnemies && defs.Game.PlayerStats == nil {
+		ve.Warnings = append(ve.Warnings, "enemy entities exist but Game.PlayerStats is not defined")
 	}
 
 	// Warnings: dangling item locations.
@@ -263,6 +286,16 @@ func validateEffects(effects []types.Effect, defs *state.Defs, ve *ValidationErr
 						"effect start_dialogue references undefined entity %q", npc))
 				}
 			}
+		case "start_combat":
+			if enemy, ok := eff.Params["enemy"].(string); ok && !isTemplate(enemy) {
+				if e, ok := defs.Entities[enemy]; !ok {
+					ve.Errors = append(ve.Errors, fmt.Sprintf(
+						"effect start_combat references undefined entity %q", enemy))
+				} else if e.Kind != "enemy" {
+					ve.Errors = append(ve.Errors, fmt.Sprintf(
+						"effect start_combat target %q is kind %q, expected \"enemy\"", enemy, e.Kind))
+				}
+			}
 		}
 	}
 }
@@ -290,7 +323,8 @@ var knownVerbs = map[string]bool{
 	"look": true, "examine": true, "take": true, "drop": true,
 	"go": true, "use": true, "open": true, "close": true,
 	"talk": true, "give": true, "push": true, "pull": true,
-	"attack": true, "inventory": true, "wait": true,
+	"attack": true, "defend": true, "flee": true,
+	"inventory": true, "wait": true,
 	"read": true, "eat": true, "drink": true, "climb": true,
 	"unlock": true, "lock": true, "search": true, "listen": true,
 	"smell": true, "touch": true, "taste": true, "throw": true,
@@ -305,4 +339,74 @@ var knownVerbs = map[string]bool{
 
 func isKnownVerb(verb string) bool {
 	return knownVerbs[verb]
+}
+
+// Known enemy behavior actions.
+var validBehaviorActions = map[string]bool{
+	"attack": true,
+	"defend": true,
+	"flee":   true,
+}
+
+// validateEnemy checks that an enemy entity has valid stats, behavior, and loot.
+func validateEnemy(entityID string, entity types.EntityDef, defs *state.Defs, ve *ValidationError) {
+	// Required stats.
+	for _, stat := range []string{"hp", "max_hp", "attack", "defense"} {
+		v, ok := entity.Props[stat]
+		if !ok {
+			ve.Errors = append(ve.Errors, fmt.Sprintf(
+				"enemy %q missing required stat %q", entityID, stat))
+			continue
+		}
+		n, isInt := toValidateInt(v)
+		if !isInt || n <= 0 {
+			ve.Errors = append(ve.Errors, fmt.Sprintf(
+				"enemy %q stat %q must be a positive integer, got %v", entityID, stat, v))
+		}
+	}
+
+	// Behavior (optional — warn if missing).
+	if behavior, ok := entity.Props["behavior"].([]types.BehaviorEntry); ok {
+		for _, b := range behavior {
+			if !validBehaviorActions[b.Action] {
+				ve.Errors = append(ve.Errors, fmt.Sprintf(
+					"enemy %q behavior action %q is not valid (attack, defend, flee)", entityID, b.Action))
+			}
+			if b.Weight <= 0 {
+				ve.Errors = append(ve.Errors, fmt.Sprintf(
+					"enemy %q behavior action %q weight must be positive, got %d", entityID, b.Action, b.Weight))
+			}
+		}
+	} else if _, hasBehavior := entity.Props["behavior"]; !hasBehavior {
+		ve.Warnings = append(ve.Warnings, fmt.Sprintf(
+			"enemy %q has no behavior table (defaults to attack-only)", entityID))
+	}
+
+	// Loot items (optional).
+	if lootItems, ok := entity.Props["loot_items"].([]types.LootEntry); ok {
+		for _, item := range lootItems {
+			if _, ok := defs.Entities[item.ItemID]; !ok {
+				ve.Errors = append(ve.Errors, fmt.Sprintf(
+					"enemy %q loot references undefined entity %q", entityID, item.ItemID))
+			}
+			if item.Chance < 1 || item.Chance > 100 {
+				ve.Errors = append(ve.Errors, fmt.Sprintf(
+					"enemy %q loot item %q chance must be 1-100, got %d", entityID, item.ItemID, item.Chance))
+			}
+		}
+	}
+}
+
+// toValidateInt converts a value to int for validation purposes.
+func toValidateInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case float64:
+		return int(n), true
+	case int64:
+		return int(n), true
+	default:
+		return 0, false
+	}
 }

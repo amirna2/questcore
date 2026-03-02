@@ -3,6 +3,8 @@ package loader
 import (
 	"strings"
 	"testing"
+
+	"github.com/nathoo/questcore/types"
 )
 
 func TestLoad_MinimalGame(t *testing.T) {
@@ -237,6 +239,96 @@ func TestLoad_RuleScopeResolution(t *testing.T) {
 		if r.ID == "examine_painting" {
 			t.Error("examine_painting should not be in global rules")
 		}
+	}
+}
+
+func TestLoad_CombatGame(t *testing.T) {
+	defs, err := Load("testdata/combat")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Player stats.
+	if defs.Game.PlayerStats == nil {
+		t.Fatal("expected PlayerStats to be set")
+	}
+	if defs.Game.PlayerStats["hp"] != 20 {
+		t.Errorf("player hp = %d, want 20", defs.Game.PlayerStats["hp"])
+	}
+	if defs.Game.PlayerStats["attack"] != 5 {
+		t.Errorf("player attack = %d, want 5", defs.Game.PlayerStats["attack"])
+	}
+
+	// Enemy entity.
+	goblin, ok := defs.Entities["cave_goblin"]
+	if !ok {
+		t.Fatal("cave_goblin entity not found")
+	}
+	if goblin.Kind != "enemy" {
+		t.Errorf("cave_goblin kind = %q, want enemy", goblin.Kind)
+	}
+	if goblin.Props["hp"] != 12 {
+		t.Errorf("goblin hp = %v, want 12", goblin.Props["hp"])
+	}
+	if goblin.Props["attack"] != 4 {
+		t.Errorf("goblin attack = %v, want 4", goblin.Props["attack"])
+	}
+	if goblin.Props["alive"] != true {
+		t.Errorf("goblin alive = %v, want true", goblin.Props["alive"])
+	}
+	if goblin.Props["name"] != "Cave Goblin" {
+		t.Errorf("goblin name = %v, want Cave Goblin", goblin.Props["name"])
+	}
+
+	// Behavior.
+	behavior, ok := goblin.Props["behavior"].([]types.BehaviorEntry)
+	if !ok {
+		t.Fatal("goblin behavior is not []BehaviorEntry")
+	}
+	if len(behavior) != 3 {
+		t.Fatalf("expected 3 behavior entries, got %d", len(behavior))
+	}
+	if behavior[0].Action != "attack" || behavior[0].Weight != 70 {
+		t.Errorf("behavior[0] = %+v, want {attack, 70}", behavior[0])
+	}
+
+	// Loot.
+	lootItems, ok := goblin.Props["loot_items"].([]types.LootEntry)
+	if !ok {
+		t.Fatal("goblin loot_items is not []LootEntry")
+	}
+	if len(lootItems) != 1 {
+		t.Fatalf("expected 1 loot item, got %d", len(lootItems))
+	}
+	if lootItems[0].ItemID != "goblin_blade" || lootItems[0].Chance != 50 {
+		t.Errorf("loot[0] = %+v, want {goblin_blade, 50}", lootItems[0])
+	}
+	if goblin.Props["loot_gold"] != 5 {
+		t.Errorf("loot_gold = %v, want 5", goblin.Props["loot_gold"])
+	}
+
+	// Attack rule exists.
+	found := false
+	for _, r := range defs.GlobalRules {
+		if r.ID == "attack_goblin" {
+			found = true
+			if r.When.Verb != "attack" {
+				t.Errorf("rule verb = %q, want attack", r.When.Verb)
+			}
+			// Should have start_combat effect.
+			hasCombat := false
+			for _, eff := range r.Effects {
+				if eff.Type == "start_combat" {
+					hasCombat = true
+				}
+			}
+			if !hasCombat {
+				t.Error("attack_goblin rule should have start_combat effect")
+			}
+		}
+	}
+	if !found {
+		t.Error("attack_goblin rule not found in global rules")
 	}
 }
 
