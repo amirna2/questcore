@@ -553,46 +553,76 @@ are shown inline next to the relevant field.
 
 ### 8.1 Page Layout
 
-The editor uses a sidebar navigation + main content area layout:
+The editor uses an IDE-style workspace layout: a toolbar across the top,
+a project explorer tree on the left, a single editor area on the right,
+and a status bar at the bottom. No multi-page routing — the explorer
+tree drives what appears in the editor area.
 
 ```
-┌──────────┬──────────────────────────────────────┐
-│          │                                      │
-│  Game    │           Main Content               │
-│  Rooms   │         (active editor)              │
-│  Items   │                                      │
-│  NPCs    │                                      │
-│  Enemies │                                      │
-│  Rules   │                                      │
-│  Events  │                                      │
-│          │                                      │
-│──────────│                                      │
-│  Import  │                                      │
-│  Export  │                                      │
-│  Errors  │                                      │
-└──────────┴──────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  Toolbar: [Project Name]   [Import] [Export]    │
+├──────────────┬──────────────────────────────────┤
+│              │                                  │
+│  Explorer    │         Editor Area              │
+│  tree        │      (form for selected item)    │
+│              │                                  │
+│  ▸ Game      │                                  │
+│  ▾ Rooms     │                                  │
+│    castle_g  │                                  │
+│    great_ha  │                                  │
+│  ▾ Entities  │                                  │
+│    rusty_key │                                  │
+│  ▸ Rules     │                                  │
+│  ▸ Events    │                                  │
+│              │                                  │
+│  [+ Room]    │                                  │
+│  [+ Entity]  │                                  │
+│  [+ Rule]    │                                  │
+│  [+ Event]   │                                  │
+│              │                                  │
+├──────────────┴──────────────────────────────────┤
+│  Status: 8 rooms, 10 entities, 2 errors         │
+└─────────────────────────────────────────────────┘
 ```
 
-### 8.2 Routes
+**Explorer tree:** Shows the full game content as a collapsible tree,
+similar to VS Code's file explorer. Each node is clickable — selecting
+it opens its editor form in the main area. Nodes with validation errors
+show a red indicator. Sections (Rooms, Entities, Rules, Events) are
+collapsible. "+" buttons at the bottom of the explorer (or inline on
+section headers) create new items.
 
-| Route             | Content                                          |
+**Toolbar:** Project name (editable), Import/Export actions, New Project.
+
+**Editor area:** A single form panel that changes based on the selected
+tree node. Forms are type-specific: room editor shows description +
+exits, entity editor adapts to kind (item/npc/enemy), rule editor
+shows the When/Conditions/Then builder.
+
+**Status bar:** Quick counts (rooms, entities, rules, events) and a
+validation error/warning summary.
+
+### 8.2 Application State
+
+The editor is a single-page application. No file-based routing —
+navigation state is managed by the explorer tree selection:
+
+| Selection         | Editor Content                                   |
 |-------------------|--------------------------------------------------|
-| `/`               | Dashboard — project overview, validation summary |
-| `/game`           | Game metadata editor                             |
-| `/rooms`          | Room list + room editor                          |
-| `/rooms/[id]`     | Single room editor (description, exits, fallbacks) |
-| `/entities`       | Entity list (all types), filterable              |
-| `/entities/[id]`  | Entity editor (form adapts to kind)              |
-| `/rules`          | Rule list + rule builder                         |
-| `/rules/[id]`     | Single rule editor                               |
-| `/events`         | Event handler list + editor                      |
-| `/export`         | Export preview + download                        |
-| `/import`         | Import `.lua` files                              |
+| Game Settings     | Game metadata editor (title, author, start room) |
+| A room node       | Room editor (description, exits, fallbacks)      |
+| An entity node    | Entity editor (form adapts to kind)              |
+| A rule node       | Rule editor (When/Conditions/Then builder)       |
+| An event node     | Event handler editor                             |
+| Nothing selected  | Welcome / empty state with quick actions         |
 
 ### 8.3 Key UI Components
 
 | Component            | Description                                       |
 |----------------------|---------------------------------------------------|
+| `ExplorerTree`       | Collapsible project tree with selection state      |
+| `Toolbar`            | Project name + Import/Export/New actions           |
+| `StatusBar`          | Content counts + validation error summary         |
 | `RoomExitEditor`     | Direction picker + room ID dropdown for each exit |
 | `EntityPicker`       | Searchable dropdown of entity IDs, filtered by kind |
 | `RoomPicker`         | Searchable dropdown of room IDs                   |
@@ -600,7 +630,7 @@ The editor uses a sidebar navigation + main content area layout:
 | `ConditionBuilder`   | Add/remove conditions, each with type-specific fields |
 | `EffectBuilder`      | Ordered list of effects, each with type-specific fields |
 | `TopicEditor`        | Topic key + text + optional conditions/effects    |
-| `ValidationBadge`    | Error/warning count shown on sidebar items        |
+| `ValidationBadge`    | Red dot / error count on tree nodes               |
 | `LuaPreview`         | Read-only code view of generated Lua for any item |
 
 ### 8.4 Rule Builder Detail
@@ -682,6 +712,9 @@ questcore-editor/
 │   │   │   └── types.ts           ← ValidationError, ValidationWarning
 │   │   │
 │   │   └── components/
+│   │       ├── ExplorerTree.svelte ← Collapsible project tree
+│   │       ├── Toolbar.svelte      ← Project name + Import/Export actions
+│   │       ├── StatusBar.svelte    ← Content counts + validation summary
 │   │       ├── EntityPicker.svelte
 │   │       ├── RoomPicker.svelte
 │   │       ├── VerbPicker.svelte
@@ -690,31 +723,18 @@ questcore-editor/
 │   │       ├── TopicEditor.svelte
 │   │       ├── LuaPreview.svelte
 │   │       ├── ValidationBadge.svelte
-│   │       └── Sidebar.svelte
+│   │       ├── editors/
+│   │       │   ├── GameEditor.svelte    ← Game metadata form
+│   │       │   ├── RoomEditor.svelte    ← Room description, exits, fallbacks
+│   │       │   ├── EntityEditor.svelte  ← Entity form (adapts to kind)
+│   │       │   ├── RuleEditor.svelte    ← When/Conditions/Then builder
+│   │       │   └── EventEditor.svelte   ← Event handler form
+│   │       └── RoomExitEditor.svelte
 │   │
 │   └── routes/
-│       ├── +layout.svelte         ← Sidebar + main content shell
-│       ├── +page.svelte           ← Dashboard
-│       ├── game/
-│       │   └── +page.svelte       ← Game metadata editor
-│       ├── rooms/
-│       │   ├── +page.svelte       ← Room list
-│       │   └── [id]/
-│       │       └── +page.svelte   ← Room editor
-│       ├── entities/
-│       │   ├── +page.svelte       ← Entity list
-│       │   └── [id]/
-│       │       └── +page.svelte   ← Entity editor
-│       ├── rules/
-│       │   ├── +page.svelte       ← Rule list
-│       │   └── [id]/
-│       │       └── +page.svelte   ← Rule editor
-│       ├── events/
-│       │   └── +page.svelte       ← Event handler list + editor
-│       ├── export/
-│       │   └── +page.svelte       ← Export preview + download
-│       └── import/
-│           └── +page.svelte       ← Import .lua files
+│       ├── +layout.svelte         ← Workspace shell (toolbar + explorer + editor)
+│       ├── +layout.ts             ← SPA mode (prerender, no SSR)
+│       └── +page.svelte           ← Single page — all UI driven by explorer selection
 │
 ├── tests/
 │   ├── codegen/                   ← Codegen unit tests
@@ -748,60 +768,75 @@ it won't work for anything — better to find out immediately.
 
 ### Phase 1: Model + Parser + Codegen spike (rooms only)
 
-1. Define all TypeScript types — both editor model and export model
-2. Integrate `luaparse` as a dependency
-3. Implement parser pipeline for rooms: AST walker → table evaluator → Room
-4. Implement Lua codegen for rooms
-5. Round-trip test: parse Lost Crown `rooms.lua` → model → codegen → diff
-6. Extend parser + codegen to remaining types (entities, rules, events)
-7. Full round-trip test: import all Lost Crown `.lua` files, re-export, diff
+1. [x] Define all TypeScript types — both editor model and export model
+2. [x] Integrate `luaparse` as a dependency
+3. [x] Implement parser pipeline for rooms: AST walker → table evaluator → Room
+4. [x] Implement Lua codegen for rooms
+5. [x] Round-trip test: parse Lost Crown `rooms.lua` → model → codegen → diff
+6. [x] Extend parser + codegen to remaining types (entities, rules, events)
+7. [x] Full round-trip test: import all Lost Crown `.lua` files, re-export, diff
 
 **Deliverable:** A library that can parse `.lua` ↔ TypeScript model ↔ `.lua`
 for all content types. The contract is proven before any UI is built.
 
+**Status: COMPLETE** — 63 tests passing, full Lost Crown round-trip verified.
+
 ### Phase 2: Core Editor UI
 
-1. SvelteKit project scaffolding with Tailwind
-2. Game store (reactive state with `EditorProject`, derived indexes)
-3. Game metadata editor page
-4. Room list + room editor (description, exits, fallbacks)
-5. Entity list + entity editor (items, NPCs, enemies)
-6. Export page (download `.lua` files as zip)
-7. Import page (upload `.lua` files, summary, warnings)
-8. LocalStorage persistence
+1. [x] SvelteKit project scaffolding with Tailwind
+2. [x] Game store (reactive state with `EditorProject`, derived indexes)
+3. [x] Game metadata editor
+4. [x] Room editor (description, exits)
+5. [ ] Room editor — fallbacks
+6. [x] Entity editor — items (name, description, location, takeable)
+7. [ ] Entity editor — NPC topics
+8. [ ] Entity editor — enemy stats, behavior, loot
+9. [x] Export (download `.lua` files)
+10. [x] Import (folder selection, all `.lua` files at once)
+11. [ ] LocalStorage persistence (project survives refresh)
 
 **Deliverable:** A functional editor that can create games from scratch,
 import existing games, and export valid `.lua` files.
 
+**Status: IN PROGRESS** — Core workspace layout working (explorer tree,
+toolbar, editor area, status bar). Import/export functional. Missing
+persistence, fallback editor, NPC/enemy-specific fields.
+
 ### Phase 3: Rule Builder
 
-1. Rule list page
-2. Rule builder form (When + Conditions + Effects)
-3. Condition builder component (type-specific fields)
-4. Effect builder component (type-specific fields, drag-to-reorder)
-5. Rule scoping (assign to room or entity)
-6. Event handler editor
+1. [x] Rule editor — When clause (verb, object, target)
+2. [ ] Condition builder component (add/remove, type-specific fields)
+3. [ ] Effect builder component (add/remove/reorder, type-specific fields)
+4. [ ] Rule scoping (assign to room or entity)
+5. [ ] Event handler editor (conditions + effects)
 
 **Deliverable:** Full rule editing capability.
 
+**Status: NOT STARTED** — When clause is editable; conditions/effects
+are read-only JSON.
+
 ### Phase 4: Validation + Polish
 
-1. Client-side validator
-2. Inline error display on all editor pages
-3. Validation summary on dashboard
-4. Cross-reference checking (entity picker shows only valid options)
-5. Lua preview panel (see generated code for any item)
+1. [ ] Client-side validator
+2. [ ] Inline error display on editor forms
+3. [ ] Validation indicators on explorer tree nodes
+4. [ ] Cross-reference checking (pickers show only valid options)
+5. [ ] Lua preview panel (see generated code for any item)
 
 **Deliverable:** Production-quality editing experience with guardrails.
 
+**Status: NOT STARTED**
+
 ### Phase 5: Richer Import Coverage
 
-1. Handle `local` variable assignments used as rule markers
-2. Surface detailed warnings for Lua logic that can't be imported
-3. Import provenance tracking (show which file each item came from)
-4. Conflict resolution when importing into an existing project
+1. [ ] Handle `local` variable assignments used as rule markers
+2. [ ] Surface detailed warnings for Lua logic that can't be imported
+3. [ ] Import provenance tracking (show which file each item came from)
+4. [ ] Conflict resolution when importing into an existing project
 
 **Deliverable:** Robust import for real-world games with edge cases.
+
+**Status: NOT STARTED**
 
 ---
 
@@ -821,9 +856,9 @@ import existing games, and export valid `.lua` files.
 
 ## 12. Open Questions
 
-1. **Separate repo or monorepo?** The editor could live in `tools/editor/`
-   within the QuestCore repo, or as a standalone `questcore-editor` repo.
-   Monorepo is simpler for development; separate repo makes deployment cleaner.
+1. ~~**Separate repo or monorepo?**~~ **Resolved: monorepo.** The editor lives
+   in `tools/editor/` within the QuestCore repo. Simpler for a solo developer,
+   and the `.lua` files (the integration contract) are in the same repo.
 
 2. **Deployment target?** Static site (GitHub Pages, Netlify) is the simplest.
    No server needed for v1 since everything is client-side.
