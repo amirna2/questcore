@@ -108,6 +108,62 @@ A parent and its children do not know about (are independent of) their invokers 
 
 ---
 
+## Primitive Control Structures
+
+> *"Every system can ultimately be defined in terms of three primitive control structures, each of which is derived from the six axioms."*
+> — Hamilton & Hackler, CSER 2007
+
+A structure relates members of a nodal family (a parent and its children) according to a set of rules derived from the axioms of control. A primitive structure provides a relationship of the most primitive form of control between objects on a map. All maps are defined ultimately in terms of three primitive control structures, and therefore abide by the formal rules associated with each structure.
+
+These three primitives are **complete** (any system can be expressed in terms of them) and **closed** (composing them yields only structures that satisfy all six axioms). Non-primitive structures can be derived from them, but every such derivation is ultimately reducible to these three.
+
+### Join — Dependent Relationship
+
+A parent controls its children to have a **dependent** relationship. The output of one child becomes the input of the next. Children must execute in the order dictated by their data dependencies — child B cannot begin until child A has produced the output that B requires.
+
+> **Example:** Sending an email. Each child depends on the output of the previous — the parent controls this chain of dependency. You cannot compose a message without first knowing the address, and you cannot deliver without first composing the message.
+>
+> ```
+> SendEmail (parent)
+>  ├── LookupAddress(name) → email_address            [child 1]
+>  ├── ComposeMessage(email_address) → message         [child 2, depends on child 1]
+>  └── Deliver(message) → delivery_confirmation        [child 3, depends on child 2]
+> ```
+
+### Include — Independent Relationship
+
+A parent controls its children to have an **independent** relationship. Children do not depend on each other's outputs. Each child receives its inputs directly from the parent and produces its outputs independently. Because they are independent, the parent controls whether they execute concurrently or in any order — the result is the same.
+
+> **Example:** Reading from sensors. Each child independently reads one measurement in the specified unit and returns the value. No child depends on another's output. Because they are independent, execution order does not matter.
+>
+> ```
+> ReadSensors (parent)
+>  ├── ReadTemperature(celsius) → temperature    [independent]
+>  ├── ReadPressure(kilopascal) → pressure       [independent]
+>  └── ReadHumidity(percent) → humidity          [independent]
+> ```
+
+### Or — Decision Making Relationship
+
+A parent controls its children to have a **decision making** relationship. The parent evaluates a condition on its input and selects **exactly one** child to execute. The children are mutually exclusive — only the selected child performs its mapping. The unselected children do not execute.
+
+> **Example:** Dispatching an emergency call. The parent evaluates the type of emergency and dispatches exactly one service. Only one child executes per invocation — the others do not run.
+>
+> ```
+> DispatchEmergencyCall (parent)
+>  ├── [emergency = fire]     → DispatchFireDept() → dispatch_confirmation
+>  ├── [emergency = medical]  → DispatchAmbulance() → dispatch_confirmation
+>  └── [emergency = crime]    → DispatchPolice() → dispatch_confirmation
+> ```
+
+### Composition
+
+Any system, no matter how complex, is defined by composing these three primitives. A Join may contain an Or at one of its steps. An Or branch may itself be a Join. An Include's independent children may each internally be defined as Joins or Ors. Because the primitives satisfy the six axioms, and because composition preserves axiom satisfaction, the resulting system is correct by construction — the entire class of interface errors is eliminated at the definition phase.
+
+> **Source:** Hamilton, M. and Hackler, W.R., "Universal Systems Language for Preventative Systems Engineering," CSER 2007, Stevens Institute of Technology. Primitive structures are defined in Figures 1–3 and the "Universal Primitive Structures" section of the paper. The structural rules for FMap application are in Figure 2.
+
+---
+
 ## Usage with Claude Code
 
 ### Single File Scan
