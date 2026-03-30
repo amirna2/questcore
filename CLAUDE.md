@@ -136,6 +136,50 @@ the things that would be painful to debug if they broke.
 
 ## Implementation Approach
 
+### Development Before The Fact
+
+To implement error free code _by definition_, and before any code is executed, we you shall write code in such a way that it validates itself against Hamilton's six axioms. This means that the code structure and patterns must be designed to inherently prevent axiom violations, rather than relying on post-hoc testing to catch them.
+
+The reference for these axioms AND the derived primitives are written in `hamilton-six-axioms-reference.md`.
+
+The reference shall be used for writing new code and for reviewing existing code. Any code that violates the axioms is considered incorrect, regardless of test results and must be refactored until it adheres to the axioms.
+
+You may be asked or may choose one of the following code verification methods:
+#### Single File Scan — Violation Detection (ATF)
+```
+Scan this file against each of Hamilton's six axioms.
+For each axiom, report: PASS, WARN, or FAIL with specific line numbers and the violation pattern.
+Reference: hamilton-six-axioms-reference.md
+```
+
+#### Single File Scan — Structural Classification (BTF)
+```
+Classify each function's decomposition in this file as Join, Include, or Or.
+Flag any function that mixes dependent and independent children in the same
+decomposition without explicitly structuring them as a Join containing an Include
+(or vice versa). These are design smells that precede axiom violations.
+Reference: /path/to/hamilton-six-axioms-reference.md
+```
+
+#### Cross-Repository Trace
+```
+Trace the complete call path from [entry point] to [terminal operation].
+At each boundary crossing (function call, service call, message publish),
+evaluate whether Axiom 2 (output responsibility) is maintained —
+does the parent ensure delivery of its output, or is the return path severed?
+```
+
+#### Severity Rating Guide
+
+| Severity | Meaning | Example |
+|----------|---------|---------|
+| **CRITICAL** | Axiom violation that can cause silent data loss or unrecoverable state | Severed return path (Ax 1+2), error swallowing (Ax 5) |
+| **HIGH** | Axiom violation that degrades system reliability under stress | Race condition (Ax 6), uncontrolled global mutation (Ax 3) |
+| **MEDIUM** | Axiom violation that complicates maintenance and traceability | Extraneous functions (Ax 1), unused parameters (Ax 4) |
+| **LOW** | Structural smell suggesting potential axiom drift | Functions with too many responsibilities, deep nesting |
+
+
+
 ### Build Order
 
 Follow this order. Each layer builds on the previous and is independently
@@ -177,7 +221,7 @@ testable before moving on:
 
 - Loader errors (bad Lua, missing references) are **fatal** — refuse to start.
 - Runtime errors during gameplay should **never crash**. Produce a player-visible
-  error message and continue. The game loop must be resilient.
+  error message and continue. The game loop must be resilient (unless it is an unrecoverable error in violation axiomatics verification approach - see above: Development Before The Fact).
 - Use typed errors or sentinel errors where callers need to distinguish cases.
 - Wrap errors with context: `fmt.Errorf("loading room %s: %w", id, err)`.
 

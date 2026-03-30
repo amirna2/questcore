@@ -117,6 +117,18 @@ A structure relates members of a nodal family (a parent and its children) accord
 
 These three primitives are **complete** (any system can be expressed in terms of them) and **closed** (composing them yields only structures that satisfy all six axioms). Non-primitive structures can be derived from them, but every such derivation is ultimately reducible to these three.
 
+### The Böhm-Jacopini Connection
+
+Hamilton's three primitive control structures correspond to the three constructs that Böhm and Jacopini (1966) proved sufficient to express any computable function. Every programmer already uses these structures daily — Hamilton's contribution is formalizing the *control rules* that make each structure safe.
+
+| Hamilton Primitive | Böhm-Jacopini Construct | What programmers already write | Hamilton's added discipline |
+|--------------------|------------------------|-------------------------------|----------------------------|
+| **Join** | Sequence | `x=a(); y=b(x); z=c(y);` | Enforced data dependency — each step's output is the next step's input, controlled by the parent |
+| **Include** | Concurrence / Parallel | Independent goroutines, ROS nodes, parallel pipelines | Enforced independence — children share no inputs/outputs with each other, only with the parent |
+| **Or** | Selection / Branching | `if/else`, `switch/case`, pattern matching | Enforced mutual exclusion — exactly one child executes, selected by a parent-controlled condition |
+
+The insight: you already write sequences, branches, and concurrent processes. Hamilton's axioms formalize the rules that make them *safe*. The question at each decomposition is not "what construct do I use?" — you already know that. The question is: **"are these children dependent, independent, or mutually exclusive?"** If you can answer that, the axioms are satisfied by construction.
+
 ### Join — Dependent Relationship
 
 A parent controls its children to have a **dependent** relationship. The output of one child becomes the input of the next. Children must execute in the order dictated by their data dependencies — child B cannot begin until child A has produced the output that B requires.
@@ -163,35 +175,6 @@ Any system, no matter how complex, is defined by composing these three primitive
 > **Source:** Hamilton, M. and Hackler, W.R., "Universal Systems Language for Preventative Systems Engineering," CSER 2007, Stevens Institute of Technology. Primitive structures are defined in Figures 1–3 and the "Universal Primitive Structures" section of the paper. The structural rules for FMap application are in Figure 2.
 
 ---
-
-## Usage with Claude Code
-
-### Single File Scan
-```
-Scan this file against each of Hamilton's six axioms.
-For each axiom, report: PASS, WARN, or FAIL with specific line numbers and the violation pattern.
-Reference: /path/to/hamilton-six-axioms-reference.md
-```
-
-### Cross-Repository Trace
-```
-Trace the complete call path from [entry point] to [terminal operation].
-At each boundary crossing (function call, service call, message publish),
-evaluate whether Axiom 2 (output responsibility) is maintained —
-does the parent ensure delivery of its output, or is the return path severed?
-```
-
-### Severity Rating Guide
-
-| Severity | Meaning | Example |
-|----------|---------|---------|
-| **CRITICAL** | Axiom violation that can cause silent data loss or unrecoverable state | Severed return path (Ax 1+2), error swallowing (Ax 5) |
-| **HIGH** | Axiom violation that degrades system reliability under stress | Race condition (Ax 6), uncontrolled global mutation (Ax 3) |
-| **MEDIUM** | Axiom violation that complicates maintenance and traceability | Extraneous functions (Ax 1), unused parameters (Ax 4) |
-| **LOW** | Structural smell suggesting potential axiom drift | Functions with too many responsibilities, deep nesting |
-
----
-
 ## Origin
 
 These axioms were derived from the empirical study of the Apollo on-board flight software, where interface errors (data flow, priority, and timing errors) accounted for approximately 75% of all errors found. The axioms define a formal foundation such that **the entire class of interface errors is eliminated by construction** — the "Development Before the Fact" paradigm. Hamilton's key insight: the root problem with traditional approaches is that they support "fixing wrong things up" rather than "doing things in the right way in the first place."
