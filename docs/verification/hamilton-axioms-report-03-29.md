@@ -12,10 +12,10 @@
 | Axiom | Verdict | Findings |
 |-------|---------|----------|
 | 1 — Control of Invocation | **PASS** | 1 MEDIUM |
-| 2 — Control of Output Responsibility | **WARN** | 1 HIGH, 2 MEDIUM |
+| 2 — Control of Output Responsibility | **WARN** | 2 MEDIUM |
 | 3 — Control of Output Access Rights | **WARN** | 1 HIGH, 1 MEDIUM |
 | 4 — Control of Input Access Rights | **PASS** | 1 MEDIUM |
-| 5 — Control of Error Detection/Rejection | **WARN** | 1 HIGH, 2 MEDIUM |
+| 5 — Control of Error Detection/Rejection | **WARN** | 1 HIGH, 3 MEDIUM |
 | 6 — Control of Ordering and Priority | **PASS** | 1 LOW |
 
 **Overall Assessment:** The architecture is remarkably well-structured for axiom compliance. The "Lua compile-time only" invariant, the pure rules pipeline, and the single-point-of-mutation design (`effects.Apply`) are textbook Hamilton-safe patterns. The findings below are mostly edge cases in the combat subsystem and error handling paths — the core engine pipeline is clean.
@@ -48,26 +48,32 @@ The invocation hierarchy is clean. `main` → `loader`/`engine`/`cli`/`tui`. `En
 
 > *A parent must ensure delivery of its output. It cannot delegate this responsibility.*
 
-### Verdict: **WARN** (1 HIGH, 2 MEDIUM findings)
+### Verdict: **WARN** (2 MEDIUM findings)
 
 #### Finding 2.1 — `effects.Apply` silently ignores unknown effect types
 
 | | |
 |---|---|
-| **Severity** | HIGH |
+| **Severity** | MEDIUM (revised from HIGH — see rationale below) |
 | **Location** | `engine/effects/effects.go:228` |
-| **Pattern** | Error swallowing / severed output path |
+| **Pattern** | Missing domain rejection (Axiom 5), with Axiom 2 consequence |
 
 ```go
 default:
     // Unknown effect type — ignore silently.
 ```
 
-If an effect with an unrecognized type reaches `Apply`, it is silently discarded. The parent (`Engine.Step`) has no way to know that one of the effects it produced was not executed. This violates Axiom 2: the parent believes it has delegated work, but the child has silently dropped it.
+**Revised analysis (2026-03-29):** This is primarily an **Axiom 5** violation, not Axiom 2. `Apply`'s domain is `[]types.Effect` where each `Effect.Type` must be one of the known effect types. An `Effect` with an unknown type is an invalid input — Axiom 5 requires the parent to detect and reject it. The Axiom 2 consequence (the parent's output silently vanishes) is downstream of the Axiom 5 failure: if `Apply` had rejected the invalid input, `Engine.Step` would receive the rejection signal and could handle it.
 
-**Why this matters:** While the `loader/validate.go` validator catches unknown effect types at compile time, there is no runtime guarantee. If a code path constructs an `Effect` with a typo (e.g., `"say_text"` instead of `"say"`), it will silently vanish. The parent's output responsibility is violated.
+**Two input paths with different risk profiles:**
 
-**Recommendation:** Return an error or append a diagnostic output line (e.g., `"[engine] unknown effect type: say_text"`). The game loop must be resilient (CLAUDE.md: "Runtime errors during gameplay should never crash"), but "resilient" should mean "report and continue", not "discard silently."
+1. **Lua-defined rules (~95% of effects):** Validated by `loader/validate.go:214` against `validEffectTypes`. The loader's Axiom 5 enforcement guarantees these are valid before the engine ever sees them. Per the Axiom 5 clarification in the reference — *"domain validation at internal boundaries is necessary only when the domain of the receiving function is narrower than or different from what the producing function guarantees"* — no runtime re-validation is needed for this path.
+
+2. **Engine-constructed effects:** Hardcoded string literals in `engine.go:336-337`, `393-395`, `406-409` and `combat.go:120-121`, `135-136`, `151-152`, `171-172`, `202-203`, `214-215`. These bypass the loader entirely. A typo (e.g., `"move_playr"`) would compile, pass existing tests, and silently do nothing at runtime. The risk is narrow (developer typo in Go source) but real.
+
+**Severity downgrade rationale:** The dominant input path (Lua rules) is fully validated upstream. The vulnerable path (engine-constructed effects) uses hardcoded string literals that are unlikely to drift, and the failure mode is visible during development (the effect simply doesn't fire). This is a compile-time-preventable problem, not a runtime data integrity issue.
+
+**Recommendation:** Define effect type constants (`const EffectSay = "say"`, etc.) in `types/` and use them in both `Apply`'s switch and all effect constructors. This eliminates the typo risk at compile time — the Go compiler becomes the Axiom 5 enforcer for path 2. The silent `default` in `Apply` should still log a diagnostic as defense-in-depth.
 
 #### Finding 2.2 — Type assertion failures silently produce zero-values
 
@@ -186,7 +192,7 @@ All fields are exported. `cli.CLI` and `tui` access `Engine.State` and `Engine.D
 
 > *A parent must detect and reject any input not in its valid domain.*
 
-### Verdict: **WARN** (1 HIGH, 2 MEDIUM findings)
+### Verdict: **WARN** (1 HIGH, 3 MEDIUM findings)
 
 #### Finding 5.1 — `save.ApplySave` performs no validation of loaded data against current definitions
 
@@ -241,6 +247,16 @@ default:
 ```
 
 An unknown condition type silently evaluates to `false`, causing its rule to never match. Like Finding 2.1, the loader validates condition types at compile time, but the runtime has no defense-in-depth. An unknown condition should at minimum log a diagnostic, or ideally the type system should make this unreachable.
+
+#### Finding 5.4 — `effects.Apply` does not reject unknown effect types (reclassified from Finding 2.1)
+
+| | |
+|---|---|
+| **Severity** | MEDIUM |
+| **Location** | `engine/effects/effects.go:228` |
+| **Pattern** | Missing domain rejection |
+
+See revised Finding 2.1 above. Originally classified as Axiom 2 (Output Responsibility) HIGH. Reclassified as Axiom 5 (Domain Validation) MEDIUM after applying the per-parent domain validation clarification from the updated Hamilton reference. The Axiom 2 consequence (lost output) is downstream of the Axiom 5 root cause (failure to reject invalid input).
 
 ---
 
@@ -312,7 +328,7 @@ These patterns deserve explicit recognition as Hamilton-safe-by-design:
 
 | # | Finding | Severity | Recommendation |
 |---|---------|----------|----------------|
-| 2.1 | Silent discard of unknown effects | HIGH | Log or surface unknown effect types at runtime |
+| 2.1 | Silent discard of unknown effects (reclassified: Axiom 5) | MEDIUM | Define effect type constants in `types/`; add diagnostic log in `default` branch |
 | 3.1 | Direct state mutation in `defaultCombatDefend` | HIGH | Route player defending through effect system |
 | 5.1 | No validation of loaded save data | HIGH | Add `ValidateSave()` at the system boundary |
 | 2.2 | Silent zero-values on type assertion failure | MEDIUM | Add param extraction with error reporting |
