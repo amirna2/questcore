@@ -1,6 +1,39 @@
 # Hamilton's Six Axioms of Control — Code Analysis Reference
 
 > Derived from Margaret H. Hamilton's "Universal Systems Language for Preventative Systems Engineering" (CSER 2007) and the empirical study of the Apollo on-board flight software. These axioms define the formal relationships of control between a parent and its children in any system hierarchy.
+>
+> Primary source: `docs/verification/usl-for-preventative-systems-engineering.pdf`
+
+---
+
+## Foundational Concepts
+
+### System Oriented Objects (SOOs)
+
+> *"Every object is a system oriented object (SOO), itself defined in terms of other SOOs. A SOO inherently integrates all aspects (e.g., function, object and timing oriented) of a system; every system is an object, every object is a system."*
+> — Hamilton & Hackler, CSER 2007, p.3
+
+A SOO is the fundamental unit in 001AXES. The recursive composition property — reliable systems are defined in terms of reliable systems, only reliable systems are used as building blocks, and only reliable systems are used as mechanisms to integrate these building blocks — is what allows the axioms to guarantee correctness at every level of the hierarchy.
+
+### FMaps and TMaps
+
+All representations of a system are defined in terms of two complementary map types:
+
+- **FMap (Functional Map):** Defines the dynamic (doing) world of action — functions, their inputs/outputs, and control flow. Captures functional and time (including priority) characteristics. The axioms of control govern parent-child relationships on an FMap.
+
+- **TMap (Type Map):** Defines the static (being) world of objects — types, their spatial relationships, and containment. Captures structural characteristics (e.g., containment of one object by another).
+
+> *"FMaps are used for defining functions and their relationships to other functions using the types of objects in the TMap(s). Each function on an FMap has one or more objects as its input and one or more objects as its output."*
+> — Hamilton & Hackler, CSER 2007, p.7
+
+FMaps and TMaps are inherently integrated: FMaps are defined in terms of TMaps, and TMaps are defined in terms of FMaps. Every type on a TMap owns a set of inherited primitive operations for its allowed FMap functional relationships.
+
+### Maps and Decomposition
+
+> *"With a map, everything you need to know (no more, no less) is available."*
+> — Hamilton & Hackler, CSER 2007, p.7
+
+A hierarchical definition is decomposed until the primitive objects have been reached. Resident at every node on an FMap is a function; resident on every node of a TMap is a type. The object at each node plays multiple roles — it can serve as a parent (in control of its children) or a child (being controlled by its parent). The decomposition stopping point can be determined and the bottom is reached when each function has been defined in terms of other functions on a defined type, one level from the bottom. The behavior of the top node is ultimately determined by the behavior of the collective set of bottom nodes.
 
 ---
 
@@ -63,6 +96,11 @@ A parent controls **which input variables each immediate child may read**. Child
 
 A parent **must detect and reject** any input that is not in its valid domain. If an invalid input is received, the parent must ensure its rejection — not silently pass it to children, not log a warning and continue, not downgrade to a default.
 
+> *"Axiom 5 states that a given parent controls the rejection of invalid elements of its own, and only its own, input set (domain). It requires that the parent must ensure the rejection of inputs received that are not in the domain of the parent. A parent, in performing its corresponding function, is responsible for determining if such an element has been received; if so, it must ensure its rejection."*
+> — Hamilton & Hackler, CSER 2007, p.5
+
+**Key clarification:** Domain validation is the responsibility of **each parent at its own level**, not just at system boundaries. However, a parent validates only **its own** domain — if a parent's child has already validated and transformed data into the child's output (which becomes the next function's input), the next function's domain is that validated output. This means: once the loader (parent) has validated Lua content and compiled it to Go structs, downstream engine functions receive those structs as their domain — the loader's Axiom 5 enforcement has already established their validity. Domain validation at internal boundaries is necessary only when the domain of the receiving function is narrower than or different from what the producing function guarantees.
+
 **What to look for:**
 
 - Missing input validation at function/module boundaries
@@ -92,10 +130,16 @@ A parent controls the **execution order and priority** of its immediate children
 
 ## Cross-Axiom Derived Rules
 
-These violations emerge from the interaction of multiple axioms:
+These rules emerge from the interaction of multiple axioms. Hamilton calls them "derived theorems" — they are logical consequences of the axioms, not additional assumptions.
+
+> *"Other implications (derived theorems) of the axioms are: every object has a unique parent, is under control and has a unique priority; communication of children is controlled by the parent, and dependent functions exist at the same level; the priority of an object is always higher than its dependents and totally ordered with respect to other objects at its own level."*
+> — Hamilton & Hackler, CSER 2007, p.6
 
 ### Output/Input Set Separation (Axioms 3 + 4)
 A function's output variables **cannot** also be its input variables. If `f(y, x) = y` exists, access to `y` is uncontrolled by the parent at the next higher level. Outputs of one function can be inputs of another function only if both are at the same level.
+
+> *"If f1(x) = y and f2(y) = g, both functions exist at the same level."*
+> — Hamilton & Hackler, CSER 2007, p.5
 
 ### Completeness of Return Paths (Axioms 1 + 2)
 Every invocation path must return control and data to the parent. **Severed return paths are the most critical violation pattern.** If a child is invoked and cannot return its result to the parent, the parent has lost control of its own output responsibility.
@@ -103,8 +147,20 @@ Every invocation path must return control and data to the parent. **Severed retu
 ### Single Reference / Single Assignment (Axioms 3 + 4 + 6)
 Each variable's relationships are predetermined instance by instance — no aliasing conflicts, no concurrent uncontrolled writes. SOOs can be defined independent of execution order because of this property.
 
+> *"The relationships of each variable are predetermined, instance by instance thus eliminating conflicts; each system has the property of single reference/single assignment. SOOs can therefore be defined independent of execution order."*
+> — Hamilton & Hackler, CSER 2007, p.6
+
 ### Nodal Family Independence (Axioms 1 + 4)
 A parent and its children do not know about (are independent of) their invokers or users. This means a function should not behave differently based on who called it — it should depend only on its declared inputs.
+
+> *"The nodal family (a parent and its children) does not know about (is independent of) its invokers or users."*
+> — Hamilton & Hackler, CSER 2007, p.6
+
+### Unique Parent and Unique Priority (Axioms 1 + 6)
+Every object has a unique parent, is under control, and has a unique priority. Communication of children is controlled by the parent. Dependent functions exist at the same level.
+
+### Concurrent Pattern Detection (Axioms 3 + 4 + 6)
+Because of the single reference/single assignment property, concurrent patterns (independencies and dependencies) can be readily detected — manually or automatically — and used to determine where parallel and distributed processing is most beneficial.
 
 ---
 
