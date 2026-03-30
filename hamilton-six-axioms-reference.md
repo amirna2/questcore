@@ -136,10 +136,11 @@ A parent controls its children to have a **dependent** relationship. The output 
 > **Example:** Sending an email. Each child depends on the output of the previous — the parent controls this chain of dependency. You cannot compose a message without first knowing the address, and you cannot deliver without first composing the message.
 >
 > ```
-> SendEmail (parent)
->  ├── LookupAddress(name) → email_address            [child 1]
->  ├── ComposeMessage(email_address) → message         [child 2, depends on child 1]
->  └── Deliver(message) → delivery_confirmation        [child 3, depends on child 2]
+> Dependent -- Composition:
+> Parent(inputs) → outputs
+>  ├── Left(inputs) → locals     [child 1]
+>  └── Right(locals) → outputs   [child 2, depends on child 1]
+> inputs, locals, and outputs are ordered sets of variables. Child 1 produces locals from inputs, and child 2 produces outputs from locals. The parent controls the order of execution because of the data dependency. Priorities: Parent > Left > Right
 > ```
 
 ### Include — Independent Relationship
@@ -149,10 +150,13 @@ A parent controls its children to have an **independent** relationship. Children
 > **Example:** Reading from sensors. Each child independently reads one measurement in the specified unit and returns the value. No child depends on another's output. Because they are independent, execution order does not matter.
 >
 > ```
-> ReadSensors (parent)
->  ├── ReadTemperature(celsius) → temperature    [independent]
->  ├── ReadPressure(kilopascal) → pressure       [independent]
->  └── ReadHumidity(percent) → humidity          [independent]
+> Independent -- Class partition:
+> Parent(inputs1, inputs2) → outputs1, outputs2
+>  ├── Left(inputs1)    → outputs1  [independent]
+>  └── Right(inputs2)   → outputs2  [independent]
+> Parent sends all its inputs to its children. Children sends all their outputs to parent.
+> Order of inputs and outputs are maintained, but children do NOT share inputs or outputs.
+> Left inputs receives left most inputs. Right receives the rest. Left produces left most outputs. Right produces the rest.
 > ```
 
 ### Or — Decision Making Relationship
@@ -162,10 +166,14 @@ A parent controls its children to have a **decision making** relationship. The p
 > **Example:** Dispatching an emergency call. The parent evaluates the type of emergency and dispatches exactly one service. Only one child executes per invocation — the others do not run.
 >
 > ```
-> DispatchEmergencyCall (parent)
->  ├── [emergency = fire]     → DispatchFireDept() → dispatch_confirmation
->  ├── [emergency = medical]  → DispatchAmbulance() → dispatch_confirmation
->  └── [emergency = crime]    → DispatchPolice() → dispatch_confirmation
+> Decision Making -- Set Partition:
+> Parent (inputs) → outputs
+>  ├── [property == true] → Left(inputs) → outputs
+>  └── [property == false] → Right(inputs) → outputs
+> Inputs of both children are identical to parent (included order).
+> Outputs of both children are identical to parent (including order).
+> Input of partition are identical to parent. (including order).
+> Parent uses partition condition to select exactly one child to execute.
 > ```
 
 ### Composition
