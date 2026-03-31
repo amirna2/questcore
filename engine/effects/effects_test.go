@@ -677,3 +677,28 @@ func TestApply_MultipleEffects(t *testing.T) {
 		t.Errorf("expected 2 events, got %d", len(events))
 	}
 }
+
+func TestApply_SetDefending(t *testing.T) {
+	s, defs, ctx := testSetup()
+	s.Combat.Active = true
+	s.Combat.EnemyID = "guard"
+
+	if s.Combat.Defending {
+		t.Fatal("expected Defending=false before applying effect")
+	}
+
+	effs := []types.Effect{
+		{Type: "set_defending"},
+	}
+	events, output := Apply(s, defs, effs, ctx)
+
+	if !s.Combat.Defending {
+		t.Error("expected Defending=true after set_defending effect")
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+	if len(output) != 0 {
+		t.Errorf("expected 0 output, got %d", len(output))
+	}
+}

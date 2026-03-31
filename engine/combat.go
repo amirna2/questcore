@@ -127,8 +127,9 @@ func (e *Engine) defaultCombatAttack(actor string) ([]types.Effect, []string) {
 // defaultCombatDefend produces effects for a default defend action.
 func (e *Engine) defaultCombatDefend(actor string) ([]types.Effect, []string) {
 	if actor == "player" {
-		e.State.Combat.Defending = true
-		return nil, []string{"You brace yourself. (+2 defense this round)"}
+		return []types.Effect{
+			{Type: "set_defending"},
+		}, []string{"You brace yourself. (+2 defense this round)"}
 	}
 	// Enemy defending.
 	enemyID := actor

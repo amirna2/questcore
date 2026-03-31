@@ -145,6 +145,9 @@ func Apply(s *types.State, defs *state.Defs, effects []types.Effect, ctx Context
 				Data: map[string]any{"npc": npc},
 			})
 
+		case "set_defending":
+			s.Combat.Defending = true
+
 		case "start_combat":
 			enemyID, _ := eff.Params["enemy"].(string)
 			s.Combat.Active = true
