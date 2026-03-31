@@ -101,7 +101,7 @@ The parent `combatDefend` declares outputs `(effs, out0)`. The `[actor=="player"
 combatDefend(s0, intent) = (effs, out0)                   [parent]
  '-- Or[actor]                                             [decision]
       |-- [actor=="player"]  -> (effs, out0)               PASS
-      |     effs = [{set_prop, "player", "defending", true}]
+      |     effs = [{set_defending}]
       |     out0 = ["You brace yourself..."]
       '-- [actor!="player"] -> (effs, out0)                PASS
             effs = [{set_prop, enemyID, "defending", true}]
@@ -109,3 +109,20 @@ combatDefend(s0, intent) = (effs, out0)                   [parent]
 ```
 
 Both branches produce `effs` for `Apply` to consume. `s0` is never written by `combatDefend`. `s1` is produced solely by `Apply`. Axioms 3, 4, and 6 are satisfied. Output access rights are restored to parent control.
+
+---
+
+## Resolution
+
+**Status:** RESOLVED (2026-03-31)
+
+The player branch in `defaultCombatDefend` (`engine/combat.go:128`) was changed from directly mutating `e.State.Combat.Defending = true` to returning a `set_defending` effect. A new `set_defending` effect type was added to `engine/effects/effects.go` that performs the same mutation through the centralized `Apply` pathway.
+
+Both Or-branches now return `(effs, out0)` matching the parent's declared output set:
+- `[actor=="player"]` → `effs = [{set_defending}]`
+- `[actor!="player"]` → `effs = [{set_prop, enemyID, "defending", true}]`
+
+Tests added:
+- `TestApply_SetDefending` — verifies the new effect type
+- `TestDefaultCombatDefend_PlayerReturnsEffect` — verifies no direct mutation, returns effect
+- `TestDefaultCombatDefend_EnemyReturnsSetProp` — verifies enemy branch unchanged

@@ -202,6 +202,48 @@ func TestIsCombatVerb(t *testing.T) {
 	}
 }
 
+func TestDefaultCombatDefend_PlayerReturnsEffect(t *testing.T) {
+	eng := combatEngine()
+
+	// Before: Defending should be false.
+	if eng.State.Combat.Defending {
+		t.Fatal("expected Defending=false before defend")
+	}
+
+	effs, output := eng.defaultCombatDefend("player")
+
+	// Must NOT have mutated state directly.
+	if eng.State.Combat.Defending {
+		t.Error("defaultCombatDefend must not mutate state directly — should return effects")
+	}
+
+	// Must return a set_defending effect.
+	if len(effs) != 1 || effs[0].Type != "set_defending" {
+		t.Errorf("expected [set_defending] effect, got %v", effs)
+	}
+
+	if len(output) == 0 {
+		t.Error("expected output message")
+	}
+}
+
+func TestDefaultCombatDefend_EnemyReturnsSetProp(t *testing.T) {
+	eng := combatEngine()
+
+	effs, output := eng.defaultCombatDefend("goblin")
+
+	if len(effs) != 1 || effs[0].Type != "set_prop" {
+		t.Errorf("expected [set_prop] effect for enemy defend, got %v", effs)
+	}
+	if effs[0].Params["entity"] != "goblin" {
+		t.Errorf("expected entity=goblin, got %v", effs[0].Params["entity"])
+	}
+
+	if len(output) == 0 {
+		t.Error("expected output message")
+	}
+}
+
 // --- Integration tests: full combat through Step() ---
 
 // combatEngine creates an engine with combat-ready defs and starts combat.
