@@ -787,20 +787,20 @@ for all content types. The contract is proven before any UI is built.
 2. [x] Game store (reactive state with `EditorProject`, derived indexes)
 3. [x] Game metadata editor
 4. [x] Room editor (description, exits)
-5. [ ] Room editor — fallbacks
+5. [x] Room editor — fallbacks
 6. [x] Entity editor — items (name, description, location, takeable)
-7. [ ] Entity editor — NPC topics
-8. [ ] Entity editor — enemy stats, behavior, loot
+7. [x] Entity editor — NPC topics
+8. [x] Entity editor — enemy stats, behavior, loot
 9. [x] Export (download `.lua` files)
 10. [x] Import (folder selection, all `.lua` files at once)
-11. [ ] LocalStorage persistence (project survives refresh)
+11. [x] LocalStorage persistence (project survives refresh)
 
 **Deliverable:** A functional editor that can create games from scratch,
 import existing games, and export valid `.lua` files.
 
-**Status: IN PROGRESS** — Core workspace layout working (explorer tree,
-toolbar, editor area, status bar). Import/export functional. Missing
-persistence, fallback editor, NPC/enemy-specific fields.
+**Status: COMPLETE** — All Phase 2 features implemented. Workspace layout,
+all entity type editors, room fallbacks, import/export, and LocalStorage
+persistence.
 
 ### Phase 3: Rule Builder
 
