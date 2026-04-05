@@ -68,7 +68,7 @@
 			}
 
 			const result = importLuaFiles(files);
-			projectStore.loadProject(result.project);
+			projectStore.replaceProject(result.project);
 
 			// Auto-select Game Settings after import
 			projectStore.select({ kind: 'game', id: null });

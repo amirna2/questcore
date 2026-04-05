@@ -15,6 +15,7 @@ import {
 	createEventHandler,
 	wrapEditorItem
 } from '../model/defaults.js';
+import { saveProject, loadProject } from './persistence.js';
 
 /** What kind of thing is selected in the explorer tree */
 export type SelectionKind = 'game' | 'room' | 'entity' | 'rule' | 'event';
@@ -25,15 +26,20 @@ export interface Selection {
 }
 
 function createProjectStore() {
-	let project = $state<EditorProject>({
+	const emptyProject: EditorProject = {
 		meta: wrapEditorItem(createGameMeta(), 0),
 		rooms: [],
 		entities: [],
 		rules: [],
 		events: []
-	});
+	};
 
+	let project = $state<EditorProject>(loadProject() ?? emptyProject);
 	let selection = $state<Selection | null>(null);
+
+	function persist() {
+		saveProject($state.snapshot(project) as EditorProject);
+	}
 
 	// Derived indexes for O(1) lookups
 	const indexes = $derived<ProjectIndexes>({
@@ -74,6 +80,7 @@ function createProjectStore() {
 		const room = createRoom(id);
 		const item = wrapEditorItem(room, project.rooms.length);
 		project.rooms.push(item);
+		persist();
 		return item;
 	}
 
@@ -82,6 +89,7 @@ function createProjectStore() {
 		if (item) {
 			updater(item.data);
 			item.meta.dirty = true;
+			persist();
 		}
 	}
 
@@ -90,6 +98,7 @@ function createProjectStore() {
 		if (selection?.kind === 'room' && selection.id === id) {
 			selection = null;
 		}
+		persist();
 	}
 
 	// ── CRUD: Entities ─────────────────────────────────────────
@@ -109,6 +118,7 @@ function createProjectStore() {
 		}
 		const item = wrapEditorItem(entity, project.entities.length);
 		project.entities.push(item);
+		persist();
 		return item;
 	}
 
@@ -117,6 +127,7 @@ function createProjectStore() {
 		if (item) {
 			updater(item.data);
 			item.meta.dirty = true;
+			persist();
 		}
 	}
 
@@ -125,6 +136,7 @@ function createProjectStore() {
 		if (selection?.kind === 'entity' && selection.id === id) {
 			selection = null;
 		}
+		persist();
 	}
 
 	// ── CRUD: Rules ────────────────────────────────────────────
@@ -133,6 +145,7 @@ function createProjectStore() {
 		const rule = createRule(id);
 		const item = wrapEditorItem(rule, project.rules.length);
 		project.rules.push(item);
+		persist();
 		return item;
 	}
 
@@ -141,6 +154,7 @@ function createProjectStore() {
 		if (item) {
 			updater(item.data);
 			item.meta.dirty = true;
+			persist();
 		}
 	}
 
@@ -149,6 +163,7 @@ function createProjectStore() {
 		if (selection?.kind === 'rule' && selection.id === id) {
 			selection = null;
 		}
+		persist();
 	}
 
 	// ── CRUD: Events ───────────────────────────────────────────
@@ -157,6 +172,7 @@ function createProjectStore() {
 		const handler = createEventHandler(eventName);
 		const item = wrapEditorItem(handler, project.events.length);
 		project.events.push(item);
+		persist();
 		return item;
 	}
 
@@ -165,11 +181,13 @@ function createProjectStore() {
 		if (item) {
 			updater(item.data);
 			item.meta.dirty = true;
+			persist();
 		}
 	}
 
 	function removeEvent(index: number) {
 		project.events.splice(index, 1);
+		persist();
 	}
 
 	// ── Game Meta ──────────────────────────────────────────────
@@ -177,13 +195,15 @@ function createProjectStore() {
 	function updateGameMeta(updater: (meta: GameMeta) => void) {
 		updater(project.meta.data);
 		project.meta.meta.dirty = true;
+		persist();
 	}
 
 	// ── Bulk Operations ────────────────────────────────────────
 
-	function loadProject(newProject: EditorProject) {
+	function replaceProject(newProject: EditorProject) {
 		project = newProject;
 		selection = null;
+		persist();
 	}
 
 	function newProject() {
@@ -195,6 +215,7 @@ function createProjectStore() {
 			events: []
 		};
 		selection = null;
+		persist();
 	}
 
 	return {
@@ -218,7 +239,7 @@ function createProjectStore() {
 		updateEvent,
 		removeEvent,
 		updateGameMeta,
-		loadProject,
+		replaceProject,
 		newProject
 	};
 }

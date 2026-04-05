@@ -27,6 +27,30 @@
 		});
 	}
 
+	function setFallback(verb: string, message: string) {
+		projectStore.updateRoom(roomId, (r) => {
+			if (message) {
+				r.fallbacks[verb] = message;
+			} else {
+				delete r.fallbacks[verb];
+			}
+		});
+	}
+
+	function addFallback() {
+		const verb = prompt('Enter verb (e.g., take, push, pull):');
+		if (!verb) return;
+		projectStore.updateRoom(roomId, (r) => {
+			r.fallbacks[verb] = '';
+		});
+	}
+
+	function removeFallback(verb: string) {
+		projectStore.updateRoom(roomId, (r) => {
+			delete r.fallbacks[verb];
+		});
+	}
+
 	function deleteRoom() {
 		if (confirm(`Delete room "${roomId}"?`)) {
 			projectStore.removeRoom(roomId);
@@ -78,6 +102,42 @@
 						</select>
 					</div>
 				{/each}
+			</div>
+		</div>
+		<!-- Fallbacks -->
+		<div>
+			<div class="flex items-center justify-between">
+				<span class="text-sm font-medium text-gray-400">Fallbacks</span>
+				<button
+					onclick={addFallback}
+					class="rounded px-2 py-0.5 text-xs text-blue-400 hover:bg-blue-900/30"
+				>
+					+ Add
+				</button>
+			</div>
+			<div class="mt-2 space-y-2">
+				{#each Object.entries(room.data.fallbacks) as [verb, message]}
+					<div class="flex items-start gap-2">
+						<span class="mt-2 w-24 shrink-0 text-right text-xs text-gray-500">{verb}</span>
+						<input
+							type="text"
+							value={message}
+							oninput={(e) => setFallback(verb, e.currentTarget.value)}
+							placeholder="Message when player tries this verb..."
+							class="flex-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
+						/>
+						<button
+							onclick={() => removeFallback(verb)}
+							class="mt-1 text-xs text-red-400 hover:text-red-300"
+							title="Remove fallback"
+						>
+							&times;
+						</button>
+					</div>
+				{/each}
+				{#if Object.keys(room.data.fallbacks).length === 0}
+					<p class="text-xs text-gray-600">No fallbacks — engine defaults apply.</p>
+				{/if}
 			</div>
 		</div>
 	</div>
